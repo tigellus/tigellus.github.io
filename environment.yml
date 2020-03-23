@@ -2,4 +2,5 @@ name: environment
 dependencies:
   - numpy
   - pandas
+  - matplotlib
 
