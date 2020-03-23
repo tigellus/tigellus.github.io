@@ -1,11 +1,6 @@
 name: environment
-channels:
-  - conda-forge
 dependencies:
-  - python
   - numpy
   - statistics
-  - pip
-  - pip:
-    - pandas
+  - pandas
 
