@@ -1,6 +1,5 @@
 name: environment
 dependencies:
   - numpy
-  - statistics
   - pandas
 
