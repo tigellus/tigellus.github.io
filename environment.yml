@@ -7,8 +7,5 @@ dependencies:
   - statistics
   - pip
   - pip:
-    - nbgitpuller
-    - sphinx-gallery
     - pandas
-    - matplotlib
 
