@@ -1,45 +1,40 @@
-/* ===== Shared sizing: nav + banner same height ===== */
+/* tune these two numbers to match your actual heights */
 :root {
-  --bar-h: 60px;         /* set the common height here */
+  --nav-h: 64px;      /* height of your nav bar */
+  --banner-h: 64px;   /* height you want for the banner */
 }
 
-/* ===== Fixed NAV at top ===== */
+/* If your nav is already fixed in main.css, this keeps it consistent.
+   If it's not fixed, this won't hurt. Bump z-index if your theme uses higher. */
 #header .main-menu {
   position: fixed;
   top: 0; left: 0; right: 0;
-  z-index: 3000;
-
-  /* match shared height + center contents vertically */
-  height: var(--bar-h);
-  display: flex;
-  align-items: center;
+  z-index: 2000;
 }
 
-/* Prevent link text from being vertically squashed by the fixed height */
-#header .main-menu .nav-menu > li > a {
-  line-height: 1.2;
-}
-
-/* ===== Banner directly under the nav ===== */
+/* Banner sits immediately under the fixed nav */
 #header .academic-banner {
   position: fixed;
-  top: var(--bar-h);
+  top: var(--nav-h);
   left: 0; right: 0;
-  z-index: 2990;
-
-  height: var(--bar-h);
-  display: flex;
-  align-items: center;      /* centers emoji + text vertically */
-  justify-content: center;
-
+  z-index: 1990;               /* just under the nav */
   background-color: #f8f9fa;
   color: #333;
-  border-bottom: 1px solid #ddd;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--banner-h);
+  padding: 0 12px;             /* side padding only */
   font-size: 14px;
-  padding: 0 12px;          /* side padding only */
+  border-bottom: 1px solid #ddd;
 }
 
-/* Link styling */
+/* Make room for both fixed bars so page content isn't hidden */
+body {
+  padding-top: calc(var(--nav-h) + var(--banner-h));
+}
+
 #header .academic-banner a {
   font-weight: 600;
   color: #007bff;
@@ -47,19 +42,11 @@
 }
 #header .academic-banner a:hover { text-decoration: underline; }
 
-/* Fix emoji clipping by giving the text its own line-height and zero margins */
-#header .academic-banner p {
-  margin: 0;
-  line-height: 1.3;         /* a touch of breathing room for emoji */
-}
-
-/* ===== Prevent content from hiding under fixed bars ===== */
-body {
-  padding-top: calc(var(--bar-h) * 2);   /* nav + banner */
-}
-
-/* ===== Mobile tweaks ===== */
+/* Mobile tweak: a bit taller + smaller text if it wraps */
 @media (max-width: 576px) {
-  :root { --bar-h: 56px; }  /* slightly taller stack if text wraps */
+  :root {
+    --nav-h: 64px;          /* keep if nav height doesn’t change on mobile */
+    --banner-h: 76px;       /* give extra room if text wraps */
+  }
   #header .academic-banner { font-size: 13px; }
 }
