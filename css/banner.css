@@ -1,8 +1,12 @@
 .academic-banner {
-  background-color: #f8f9fa;
+  background-color: #f1f5f9;   /* light blue-gray, distinct from white */
   text-align: center;
+  padding: 18px;               /* taller height */
+  border-bottom: 1px solid #e2e8f0; /* softer separator */
+  font-size: 15px;
 }
 
 .academic-banner p {
   margin: 0;
+  line-height: 1.4;
 }
