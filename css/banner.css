@@ -10,6 +10,7 @@
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 2000;
+  background-color: #fff;
 }
 
 /* Banner sits immediately under the fixed nav */
@@ -20,7 +21,7 @@
   z-index: 1990;               /* just under the nav */
   background-color: #f8f9fa;
   color: #333;
-  text-align: center;
+  align-items: center;
   display: flex;
   align-items: center;
   justify-content: center;
