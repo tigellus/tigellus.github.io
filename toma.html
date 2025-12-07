@@ -3,22 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>THE GHOST OF EUROPE: CHALLENGE v10.1 (SPEED FIX)</title>
+    <title>THE GHOST OF EUROPE: v10.2</title>
     <style>
         body {
             background-color: #050505;
+            margin: 0;
+            /* THE FIX: Make body taller than screen to allow browser UI hiding */
+            min-height: 120vh; 
+            overflow-y: auto; 
+            touch-action: pan-y; /* Allow vertical swipe */
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* NEW WRAPPER: Keeps the game centered and pinned while body scrolls behind it */
+        #game-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #eee;
-            font-family: 'Courier New', Courier, monospace;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: none;
+            z-index: 1;
         }
         
         canvas {
@@ -28,7 +36,7 @@
             image-rendering: pixelated;
             cursor: crosshair;
             max-width: 100%;
-            max-height: 80vh;
+            max-height: 80vh; /* Leave room for controls */
             display: block;
         }
 
@@ -102,6 +110,7 @@
         }
         .action-btn:active { background: rgba(231, 76, 60, 0.9); transform: scale(0.95); }
 
+        /* Show controls on small screens or touch devices */
         @media (max-width: 1024px), (pointer: coarse) {
             #mobileControls { display: flex; }
         }
@@ -109,21 +118,23 @@
 </head>
 <body>
 
-<div class="ui-overlay">
-    <div class="chapter" id="chapterDisplay">WAITING...</div>
-    <div class="score" id="scoreDisplay">REP: 0</div>
-</div>
-
-<canvas id="gameCanvas" width="800" height="450"></canvas>
-
-<div id="mobileControls">
-    <div class="dpad">
-        <div class="d-btn d-up" data-key="ArrowUp"></div>
-        <div class="d-btn d-down" data-key="ArrowDown"></div>
-        <div class="d-btn d-left" data-key="ArrowLeft"></div>
-        <div class="d-btn d-right" data-key="ArrowRight"></div>
+<div id="game-layer">
+    <div class="ui-overlay">
+        <div class="chapter" id="chapterDisplay">WAITING...</div>
+        <div class="score" id="scoreDisplay">REP: 0</div>
     </div>
-    <div class="action-btn" id="btnA" data-key="Space">A</div>
+
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+
+    <div id="mobileControls">
+        <div class="dpad">
+            <div class="d-btn d-up" data-key="ArrowUp"></div>
+            <div class="d-btn d-down" data-key="ArrowDown"></div>
+            <div class="d-btn d-left" data-key="ArrowLeft"></div>
+            <div class="d-btn d-right" data-key="ArrowRight"></div>
+        </div>
+        <div class="action-btn" id="btnA" data-key="Space">A</div>
+    </div>
 </div>
 
 <script>
@@ -154,6 +165,7 @@
     let levelStartScore = 0;
     let challengerScore = 0;
     
+    // FUNNY QUOTES
     const QUOTES = [
         "Mamma Mia! Not today!", "Enjoy the risotto in jail!", "Ciao Bello! You are busted!",
         "My grandmother runs faster!", "No pizza for you tonight!", "The Carabinieri send regards!",
@@ -164,8 +176,11 @@
     ];
     let currentQuote = "";
 
-    // --- INITIALIZATION (FIXED: NO DOUBLE LOOP) ---
+    // --- INITIALIZATION ---
     window.onload = function() {
+        // Auto-scroll attempt to hide address bar
+        window.scrollTo(0, 1);
+        
         const urlParams = new URLSearchParams(window.location.search);
         if(urlParams.has('score')) {
             challengerScore = parseInt(urlParams.get('score')) || 0;
@@ -173,7 +188,7 @@
         } else {
             currentState = STATE.WARNING;
         }
-        loop(); // Only call loop here!
+        loop(); 
     };
 
     // --- INPUT ---
@@ -232,8 +247,9 @@
             if(x > 250 && x < 550 && y > 300 && y < 350) copyLink();
         }
     }
-    canvas.addEventListener('mousedown', e => handleScreenClick(e.clientX, e.clientY));
-    canvas.addEventListener('touchstart', e => {
+    // Listen on window to catch clicks passing through overlay
+    window.addEventListener('mousedown', e => handleScreenClick(e.clientX, e.clientY));
+    window.addEventListener('touchstart', e => {
         const touch = e.touches[0];
         handleScreenClick(touch.clientX, touch.clientY);
     });
@@ -543,7 +559,7 @@
         
         if (!c1.isClimbing) { 
             let frame = 0;
-            if (keys['ArrowRight']) { frame = c1.soccerTimer; if (c1.guardLooking) { currentQuote = getQuote(); c1.bustedTimer = 150; keys['ArrowRight'] = false; } c1.playerX += 3; } 
+            if (keys['ArrowRight']) { frame = c1.soccerTimer; if (c1.guardLooking) { currentQuote = getQuote(); c1.bustedTimer = 150; score -= 50; keys['ArrowRight'] = false; } c1.playerX += 3; } 
             drawToma(c1.playerX, 300, 1.5, frame); 
             if (c1.playerX > 680) c1.isClimbing = true; 
         } else { 
@@ -576,7 +592,7 @@
         
         let frame = moving ? Math.floor(Date.now()/50) : 0;
         drawToma(c15.x, c15.y, 1, frame); 
-        c15.eggLocs.forEach(e => { if(!e.taken && Math.abs(c15.x - e.x) < 20 && Math.abs(c15.y - e.y) < 20) { e.taken = true; c15.eggsCollected++; score += 500; }}); if (c15.cookState === 2 && moving) { currentQuote = getQuote(); c15.bustedTimer = 120; } if (c15.eggsCollected >= 5) { currentState = STATE.CH4_WIN; }
+        c15.eggLocs.forEach(e => { if(!e.taken && Math.abs(c15.x - e.x) < 20 && Math.abs(c15.y - e.y) < 20) { e.taken = true; c15.eggsCollected++; score += 500; }}); if (c15.cookState === 2 && moving) { currentQuote = getQuote(); c15.bustedTimer = 120; score -= 200; } if (c15.eggsCollected >= 5) { currentState = STATE.CH4_WIN; }
     }
 
     // 5. PARMA
@@ -595,7 +611,7 @@
 
         let safe = Math.abs(c2.guardX - 550) > 180; if (keys['Space']) { c2.isSawing = true; c2.sawProgress += 0.15; c2.noise += 0.9; score += 1; c2.pasteDelay = 60; ctx.fillStyle = 'yellow'; ctx.fillRect(655 + Math.random()*10, 220, 3, 3); } else { c2.isSawing = false; if(c2.pasteDelay > 0) { c2.pasteDelay--; c2.noise -= 0.05; } else { c2.noise -= 0.6; } }
         
-        if (c2.noise < 0) c2.noise = 0; if (c2.noise > 100) c2.noise = 100; if (!safe && c2.noise > 30) { currentQuote = getQuote(); c2.bustedTimer = 150; }
+        if (c2.noise < 0) c2.noise = 0; if (c2.noise > 100) c2.noise = 100; if (!safe && c2.noise > 30) { currentQuote = getQuote(); c2.bustedTimer = 150; score -= 100; }
         ctx.fillStyle = '#fff'; ctx.font = '16px Courier New'; ctx.textAlign = 'left'; 
         ctx.fillText("PROGRESS:", 20, 30);
         ctx.fillStyle = '#333'; ctx.fillRect(130, 15, 200, 15);
@@ -654,6 +670,7 @@
         if (c4.descent > 3000) currentState = STATE.CH7_WIN;
     }
 
+    // No extra loop() call here! It's in window.onload.
 </script>
 </body>
 </html>
