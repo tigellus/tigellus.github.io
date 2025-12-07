@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>THE GHOST OF EUROPE: LEGEND v9.1</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>THE GHOST OF EUROPE: CHALLENGE v10.1 (SPEED FIX)</title>
     <style>
         body {
             background-color: #050505;
@@ -17,18 +17,26 @@
             margin: 0;
             overflow: hidden;
             user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
         }
+        
         canvas {
             border: 4px solid #333;
             background-color: #000;
             box-shadow: 0 0 50px rgba(0,0,0,0.9);
             image-rendering: pixelated;
             cursor: crosshair;
+            max-width: 100%;
+            max-height: 80vh;
+            display: block;
         }
+
         .ui-overlay {
             position: absolute;
-            top: 20px;
-            width: 800px;
+            top: 10px;
+            width: 100%;
+            max-width: 800px;
             display: flex;
             justify-content: space-between;
             padding: 0 20px;
@@ -37,8 +45,66 @@
             text-shadow: 2px 2px 0 #000;
             z-index: 10;
         }
-        .score { color: #f1c40f; font-weight: bold; font-size: 24px; }
-        .chapter { color: #bdc3c7; font-weight: bold; text-transform: uppercase; }
+        .score { color: #f1c40f; font-weight: bold; font-size: 20px; }
+        .chapter { color: #bdc3c7; font-weight: bold; text-transform: uppercase; font-size: 16px; }
+
+        /* MOBILE CONTROLS */
+        #mobileControls {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            height: 140px;
+            pointer-events: none;
+            z-index: 20;
+            justify-content: space-between;
+            padding: 0 30px;
+            box-sizing: border-box;
+        }
+
+        .dpad {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            pointer-events: auto;
+        }
+
+        .d-btn {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            width: 45px;
+            height: 45px;
+            backdrop-filter: blur(4px);
+        }
+        .d-btn:active { background: rgba(255, 255, 255, 0.5); }
+        .d-up { top: 0; left: 48px; }
+        .d-down { bottom: 0; left: 48px; }
+        .d-left { top: 48px; left: 0; }
+        .d-right { top: 48px; right: 0; }
+
+        .action-btn {
+            pointer-events: auto;
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: rgba(231, 76, 60, 0.4);
+            border: 4px solid rgba(231, 76, 60, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 24px;
+            margin-top: 25px;
+            backdrop-filter: blur(4px);
+        }
+        .action-btn:active { background: rgba(231, 76, 60, 0.9); transform: scale(0.95); }
+
+        @media (max-width: 1024px), (pointer: coarse) {
+            #mobileControls { display: flex; }
+        }
     </style>
 </head>
 <body>
@@ -50,66 +116,65 @@
 
 <canvas id="gameCanvas" width="800" height="450"></canvas>
 
+<div id="mobileControls">
+    <div class="dpad">
+        <div class="d-btn d-up" data-key="ArrowUp"></div>
+        <div class="d-btn d-down" data-key="ArrowDown"></div>
+        <div class="d-btn d-left" data-key="ArrowLeft"></div>
+        <div class="d-btn d-right" data-key="ArrowRight"></div>
+    </div>
+    <div class="action-btn" id="btnA" data-key="Space">A</div>
+</div>
+
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('scoreDisplay');
     const chapEl = document.getElementById('chapterDisplay');
+    const controlsDiv = document.getElementById('mobileControls');
 
-    // --- GAME STATE MANAGEMENT ---
+    // --- GAME STATE ---
     const STATE = {
+        CHALLENGE: -1,
         WARNING: 0, MENU: 1,
         
-        // CH 1: BROKER
         CH1_INTRO: 5, CH1_GAME: 6, CH1_JAIL: 7, CH1_HISTORY: 8,
-        
-        // CH 2: TERNI
         CH2_INTRO: 10, CH2_GAME: 11, CH2_WIN: 115, CH2_HISTORY: 12,
-        
-        // CH 3: FUGITIVE
         CH3_INTRO: 13, CH3_GAME: 14, CH3_WIN: 142, CH3_HISTORY: 145,
-
-        // CH 4: CANTEEN
         CH4_INTRO: 15, CH4_GAME: 16, CH4_WIN: 17, CH4_HISTORY: 18,
-        
-        // CH 5: PARMA
         CH5_INTRO: 20, CH5_GAME: 21, CH5_WIN: 215, CH5_HISTORY: 22,
-        
-        // CH 6: MANHUNT
         CH6_INTRO: 30, CH6_GAME: 31, CH6_JAIL: 32, CH6_HISTORY: 33,
-        
-        // CH 7: OPERA
         CH7_INTRO: 35, CH7_GAME: 36, CH7_WIN: 37, CH7_HISTORY: 38,
-
+        
         FINAL_SCORE: 40
     };
 
     let currentState = STATE.WARNING;
     let score = 0;
     let levelStartScore = 0;
+    let challengerScore = 0;
     
-    // FUNNY QUOTES
     const QUOTES = [
-        "Mamma Mia! Not today!",
-        "Enjoy the risotto in jail!",
-        "Ciao Bello! You are busted!",
-        "My grandmother runs faster!",
-        "No pizza for you tonight!",
-        "The Carabinieri send regards!",
-        "You run like a turtle in polenta!",
-        "Did you forget your glasses?",
-        "Back to the cell, tough guy!",
-        "Even the Pope is disappointed!",
-        "My cat catches mice faster!",
-        "Too much spaghetti for lunch?",
-        "Forget the bedsheets, use the door!",
-        "Not in my shift, amico!",
-        "Go directly to jail, do not pass Go!",
-        "You call that an escape?",
-        "Pasta la vista, baby!",
-        "You are grounded, mister!"
+        "Mamma Mia! Not today!", "Enjoy the risotto in jail!", "Ciao Bello! You are busted!",
+        "My grandmother runs faster!", "No pizza for you tonight!", "The Carabinieri send regards!",
+        "You run like a turtle in polenta!", "Did you forget your glasses?", "Back to the cell, tough guy!",
+        "Even the Pope is disappointed!", "My cat catches mice faster!", "Too much spaghetti for lunch?",
+        "Forget the bedsheets, use the door!", "Not in my shift, amico!", "Go directly to jail, do not pass Go!",
+        "You call that an escape?", "Pasta la vista, baby!", "You are grounded, mister!"
     ];
     let currentQuote = "";
+
+    // --- INITIALIZATION (FIXED: NO DOUBLE LOOP) ---
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if(urlParams.has('score')) {
+            challengerScore = parseInt(urlParams.get('score')) || 0;
+            currentState = STATE.CHALLENGE;
+        } else {
+            currentState = STATE.WARNING;
+        }
+        loop(); // Only call loop here!
+    };
 
     // --- INPUT ---
     const keys = {};
@@ -124,23 +189,21 @@
         keysPressed[e.code] = false; 
     });
 
-    canvas.addEventListener('mousedown', (e) => {
-        if(currentState === STATE.FINAL_SCORE) {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            if(x > 250 && x < 550 && y > 300 && y < 350) copyLink();
-        }
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-        if(currentState === STATE.FINAL_SCORE) {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            if(x > 250 && x < 550 && y > 300 && y < 350) canvas.style.cursor = 'pointer';
-            else canvas.style.cursor = 'default';
-        } else canvas.style.cursor = 'default';
+    const touchButtons = document.querySelectorAll('.d-btn, .action-btn');
+    touchButtons.forEach(btn => {
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const key = btn.getAttribute('data-key');
+            keys[key] = true;
+            if(key === 'Space') keys['Enter'] = true; 
+        });
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const key = btn.getAttribute('data-key');
+            keys[key] = false;
+            keysPressed[key] = false;
+            if(key === 'Space') { keys['Enter'] = false; keysPressed['Enter'] = false; }
+        });
     });
 
     function isKeyTapped(code) {
@@ -151,9 +214,32 @@
         return false;
     }
 
+    function checkMobile() {
+        return getComputedStyle(controlsDiv).display !== 'none';
+    }
+
+    function txt(desktop, mobile) {
+        return checkMobile() ? mobile : desktop;
+    }
+
+    function handleScreenClick(clientX, clientY) {
+        if(currentState === STATE.FINAL_SCORE) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
+            if(x > 250 && x < 550 && y > 300 && y < 350) copyLink();
+        }
+    }
+    canvas.addEventListener('mousedown', e => handleScreenClick(e.clientX, e.clientY));
+    canvas.addEventListener('touchstart', e => {
+        const touch = e.touches[0];
+        handleScreenClick(touch.clientX, touch.clientY);
+    });
+
     function resetGame() {
-        score = 0;
-        levelStartScore = 0;
+        score = 0; levelStartScore = 0;
         c0 = { x: 400, y: 225, items: [], cops: [], timer: 0, lives: 2, bustedState: 0, bustedTimer: 0 };
         c1 = { playerX: 50, wallHeight: 0, isClimbing: false, guardLooking: false, guardTimer: 0, nextSwitch: 100, bustedTimer: 0, soccerTimer: 0 };
         c12 = { lane: 1, carY: 350, obstacles: [], timer: 0, distance: 0, bustedTimer: 0 };
@@ -164,13 +250,12 @@
     }
 
     function copyLink() {
-        navigator.clipboard.writeText("www.google.com");
-        alert("Link copied to clipboard: www.google.com");
+        const url = "https://valentinopacifici.com/toma.html?score=" + Math.floor(score);
+        navigator.clipboard.writeText(url);
+        alert("Challenge Link copied!\n" + url);
     }
 
-    function getQuote() {
-        return QUOTES[Math.floor(Math.random() * QUOTES.length)];
-    }
+    function getQuote() { return QUOTES[Math.floor(Math.random() * QUOTES.length)]; }
 
     // --- VARIABLES ---
     let c0 = { x: 400, y: 225, items: [], cops: [], timer: 0, lives: 2, bustedState: 0, bustedTimer: 0 };
@@ -184,25 +269,33 @@
     // --- DRAWING HELPERS ---
     function drawToma(x, y, scale = 1, animFrame = 0, suit = false, hanging = false) {
         ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+        // Bobbing Anim
+        if(animFrame > 0 && !hanging) ctx.translate(0, (Math.floor(animFrame/5)%2===0) ? -2 : 0);
+
         ctx.fillStyle = suit ? '#2c3e50' : '#95a5a6'; ctx.fillRect(0, 0, 20, 40);
         if(!suit) { ctx.fillStyle = '#2c3e50'; for(let i=10; i<40; i+=10) ctx.fillRect(0, i, 20, 4); } 
         else { ctx.fillStyle = '#c0392b'; ctx.fillRect(8, 5, 4, 15); }
         ctx.fillStyle = '#eebb99'; ctx.fillRect(2, -12, 16, 12);
         ctx.fillStyle = '#222'; ctx.fillRect(2, -14, 16, 4);
         ctx.fillStyle = suit ? '#2c3e50' : '#7f8c8d';
-        
         if(hanging) {
             ctx.fillRect(2, 40, 6, 15); ctx.fillRect(12, 40, 6, 15);
             ctx.fillStyle = '#eebb99'; ctx.fillRect(-2, -5, 4, 15); ctx.fillRect(18, -5, 4, 15);
         } else {
-            if (animFrame % 20 < 10) { ctx.fillRect(2, 40, 6, 10); ctx.fillRect(12, 40, 6, 10); } 
-            else { ctx.fillRect(2, 38, 6, 10); ctx.fillRect(12, 42, 6, 10); }
+            if (animFrame > 0) { // Fast legs
+                if (Math.floor(animFrame / 4) % 2 === 0) { ctx.fillRect(0, 38, 8, 12); ctx.fillRect(14, 38, 4, 8); } 
+                else { ctx.fillRect(4, 38, 4, 8); ctx.fillRect(12, 38, 8, 12); }
+            } else {
+                ctx.fillRect(2, 38, 6, 12); ctx.fillRect(12, 38, 6, 12);
+            }
         }
         ctx.restore();
     }
 
-    function drawGuard(x, y, lookingLeft, hasCone = true) {
+    function drawGuard(x, y, lookingLeft, hasCone = true, animFrame = 0) {
         ctx.save(); ctx.translate(x, y);
+        if(animFrame > 0) ctx.translate(0, (Math.floor(animFrame/5)%2===0) ? -2 : 0);
+
         if (hasCone) {
             ctx.fillStyle = 'rgba(231, 76, 60, 0.4)'; ctx.beginPath();
             if (lookingLeft) { ctx.moveTo(0, -10); ctx.lineTo(-250, -100); ctx.lineTo(-250, 150); } 
@@ -214,6 +307,14 @@
         ctx.fillStyle = '#192a56'; ctx.fillRect(2, -16, 20, 6);
         ctx.fillStyle = '#e74c3c'; 
         if (lookingLeft) ctx.fillRect(4, -8, 4, 4); else ctx.fillRect(16, -8, 4, 4);
+        
+        ctx.fillStyle = '#192a56';
+        if (animFrame > 0) {
+             if (Math.floor(animFrame / 6) % 2 === 0) { ctx.fillRect(0, 42, 8, 12); ctx.fillRect(16, 42, 4, 8); } 
+             else { ctx.fillRect(4, 42, 4, 8); ctx.fillRect(14, 42, 8, 12); }
+        } else {
+            ctx.fillRect(2, 45, 8, 10); ctx.fillRect(14, 45, 8, 10);
+        }
         ctx.restore();
     }
 
@@ -222,7 +323,6 @@
         ctx.clearRect(0, 0, 800, 450);
         scoreEl.innerText = "REP: " + Math.floor(score);
 
-        // CHEAT CODE: R to Skip
         if(isKeyTapped('r') || isKeyTapped('R')) {
             if(currentState === STATE.CH1_GAME) currentState = STATE.CH1_HISTORY;
             else if(currentState === STATE.CH2_GAME) currentState = STATE.CH2_WIN;
@@ -234,6 +334,7 @@
         }
 
         switch (currentState) {
+            case STATE.CHALLENGE: screenChallenge(); break;
             case STATE.WARNING: screenWarning(); break;
             case STATE.MENU: screenMenu(); break;
             
@@ -242,32 +343,32 @@
             case STATE.CH1_JAIL: screenJail("TERNI PRISON", "2009", "MAX SECURITY WING"); break;
             case STATE.CH1_HISTORY: screenHistory("THE REALITY: 2008", "Taulant Toma was not a street dealer.", "He was a high-level logistics broker for the", "Italian Mafia, moving tons of cocaine.", "He was eventually tracked and captured."); break;
 
-            case STATE.CH2_INTRO: screenStory("CHAPTER 2: TERNI, 2009", "The Opportunity", "Guard looks away? RUN (Arrows).", "Guard looks back? STOP.", "At the wall: CLIMB (Tap Space).", ""); break;
+            case STATE.CH2_INTRO: screenStory("CHAPTER 2: TERNI, 2009", "The Opportunity", txt("Guard looks away? RUN (Arrows).", "Guard looks away? USE D-PAD."), txt("At the wall: CLIMB (Tap UP ARROW).", "At the wall: CLIMB (Tap D-PAD UP)."), ""); break;
             case STATE.CH2_GAME: playTerni(); break;
             case STATE.CH2_WIN: screenStory("SUCCESS!", "Wall Scaled", "You vanished into the woods", "while the crowd cheered for the goal.", ""); break; 
             case STATE.CH2_HISTORY: screenHistory("THE REALITY: TERNI 2009", "During a prison soccer match,", "Toma waited for the guards to watch a goal.", "He scaled the perimeter wall in seconds", "and vanished into the woods."); break;
 
-            case STATE.CH3_INTRO: screenStory("CHAPTER 3: THE FUGITIVE", "On The Run (2009-2013)", "Move between Germany & Belgium.", "LEFT/RIGHT Arrow to switch lanes.", "Collect Phones. Avoid Interpol.", "Travel 2000km."); break;
+            case STATE.CH3_INTRO: screenStory("CHAPTER 3: THE FUGITIVE", "On The Run (2009-2013)", "Move between Germany & Belgium.", txt("LEFT/RIGHT to switch lanes.", "D-PAD LEFT/RIGHT to switch."), "Collect Phones. Avoid Interpol.", ""); break;
             case STATE.CH3_GAME: playFugitive(); break;
             case STATE.CH3_WIN: screenStory("SUCCESS!", "Network Rebuilt", "You evaded the dragnet for 3 years.", "But your luck is running out...", ""); break;
             case STATE.CH3_HISTORY: screenHistory("THE REALITY: THE GHOST", "For 3 years, Toma lived as a fugitive.", "He moved between Germany and Belgium,", "re-establishing his drug logistics empire", "before being caught and sent to Parma."); break;
 
-            case STATE.CH4_INTRO: screenStory("CHAPTER 4: THE CANTEEN", "Bonus Level: The Heist", "Steal Eggs for Extra REP.", "Cook Facing UP = Safe.", "Cook Facing DOWN = FREEZE (Don't Move).", "Collect 5 Eggs."); break;
+            case STATE.CH4_INTRO: screenStory("CHAPTER 4: THE CANTEEN", "Bonus Level: The Heist", "Steal Eggs for Extra REP.", "Cook Facing UP = Safe.", "Cook Facing DOWN = FREEZE.", "Collect 5 Eggs."); break;
             case STATE.CH4_GAME: playCanteen(); break;
             case STATE.CH4_WIN: screenStory("SUCCESS!", "Ingredients Acquired", "You have enough egg whites.", "Now you can make the chemical paste", "to hide your saw cuts."); break;
             case STATE.CH4_HISTORY: screenHistory("THE REALITY: THE PREP", "In Parma, Toma needed to cut iron bars.", "To hide the cuts from daily inspection,", "he mixed egg whites with dust to create", "a paste that looked exactly like rust."); break;
             
-            case STATE.CH5_INTRO: screenStory("CHAPTER 5: PARMA, 2013", "The Sawing", "Hold SPACE to saw.", "Release to prepare Paste.", "NEW: There is a 1-second delay!", "Don't get caught."); break;
+            case STATE.CH5_INTRO: screenStory("CHAPTER 5: PARMA, 2013", "The Sawing", txt("Hold SPACE to saw.", "Hold A to saw."), txt("Release to prepare Paste.", "Release A to Paste."), "NEW: There is a 1-second delay!", "Don't get caught."); break;
             case STATE.CH5_GAME: playParma(); break;
             case STATE.CH5_WIN: screenStory("SUCCESS!", "The Bars Are Cut", "You applied the fake rust.", "The guards noticed nothing.", "Tonight, you leave."); break;
             case STATE.CH5_HISTORY: screenHistory("THE REALITY: PARMA 2013", "On a rainy night in December,", "Toma removed the bars he had sawed", "over weeks. He descended using bedsheets", "and met armed accomplices outside."); break;
             
-            case STATE.CH6_INTRO: screenStory("CHAPTER 6: THE GETAWAY", "Belgium Border Run", "Drive fast (Arrows).", "Avoid Police.", "One crash ends it.", ""); break;
+            case STATE.CH6_INTRO: screenStory("CHAPTER 6: THE GETAWAY", "Belgium Border Run", txt("Drive fast (Arrows).", "Drive fast (D-Pad)."), "Avoid Police.", "One crash ends it.", ""); break;
             case STATE.CH6_GAME: playDriving(); break;
             case STATE.CH6_JAIL: screenJail("OPERA PRISON", "2025", "41-bis HARD REGIME"); break;
             case STATE.CH6_HISTORY: screenHistory("THE REALITY: THE MANHUNT", "Toma remained a ghost for 8 months.", "He was eventually cornered by Special Forces", "in Liège, Belgium. He did not fight back.", "He was returned to Italy."); break;
             
-            case STATE.CH7_INTRO: screenStory("CHAPTER 7: OPERA, 2025", "The Impossible Escape", "You sawed the bars again.", "Now, the Laser Wall.", "Hold DOWN to Slide. Hold UP to Brake.", "Don't touch Lasers. Don't move in Light."); break;
+            case STATE.CH7_INTRO: screenStory("CHAPTER 7: OPERA, 2025", "The Impossible Escape", "You sawed the bars again.", "Now, the Laser Wall.", txt("Hold DOWN to Slide. UP to Brake.", "D-PAD DOWN Slide. UP Brake."), "Don't touch Lasers. Don't move in Light."); break;
             case STATE.CH7_GAME: playOpera(); break;
             case STATE.CH7_WIN: screenStory("SUCCESS!", "LEGEND STATUS", "You crossed the perimeter.", "The Audi RS6 is waiting.", "You are gone."); break;
             case STATE.CH7_HISTORY: screenHistory("THE REALITY: DEC 7, 2025", "Toma escaped the 'inescapable' Opera prison.", "He used his signature sawing technique.", "Police suspect a drone delivered the tools", "and external clans hacked the sensors."); break;
@@ -277,7 +378,23 @@
         requestAnimationFrame(loop);
     }
 
-    // --- SCREENS ---
+    // --- SCENES ---
+    function screenChallenge() {
+        chapEl.innerText = "CHALLENGE RECEIVED";
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,800,450);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 32px Courier New';
+        ctx.fillText("YOUR FRIEND SCORED: " + challengerScore, 400, 150);
+        ctx.fillStyle = '#888'; ctx.font = '16px Courier New';
+        ctx.fillText("(Unless they tinkered with the link...)", 400, 180);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Courier New';
+        ctx.fillText("Show that you can beat them!", 400, 250);
+        ctx.fillStyle = '#2ecc71'; ctx.font = 'bold 40px Courier New';
+        ctx.fillText("ANDIAMO!", 400, 320);
+        ctx.fillStyle = '#f1c40f'; ctx.font = '20px Courier New';
+        if (Math.floor(Date.now() / 500) % 2 === 0) ctx.fillText(txt("[ PRESS ENTER TO ACCEPT ]", "[ TAP BUTTON A ]"), 400, 400);
+        if (isKeyTapped('Enter')) { resetGame(); currentState = STATE.WARNING; }
+    }
+
     function screenWarning() {
         chapEl.innerText = "WARNING";
         ctx.fillStyle = '#000'; ctx.fillRect(0,0,800,450);
@@ -292,7 +409,7 @@
         ctx.fillText("DO NOT SPEND YOUR LIFE TRYING TO ESCAPE PRISON.", 400, 330);
         ctx.fillStyle = '#fff'; ctx.fillText("DO NOT BE LIKE TOMA.", 400, 360);
         ctx.fillStyle = '#f1c40f'; ctx.font = '20px Courier New';
-        if (Math.floor(Date.now() / 500) % 2 === 0) ctx.fillText("[ PRESS ENTER TO ACKNOWLEDGE ]", 400, 410);
+        if (Math.floor(Date.now() / 500) % 2 === 0) ctx.fillText(txt("[ PRESS ENTER TO ACKNOWLEDGE ]", "[ TAP BUTTON A ]"), 400, 410);
         if (isKeyTapped('Enter')) setTimeout(() => currentState = STATE.MENU, 300);
     }
 
@@ -303,7 +420,7 @@
         ctx.fillText("THE GHOST", 400, 140); ctx.font = '30px Courier New'; ctx.fillText("OF EUROPE", 400, 180);
         ctx.fillStyle = '#e67e22'; ctx.font = 'bold 20px Courier New';
         ctx.fillText("THE NEW LEGEND OF THE UNDERWORLD", 400, 230);
-        ctx.fillStyle = '#f1c40f'; ctx.font = '20px Courier New'; ctx.fillText("[ PRESS ENTER TO START ]", 400, 350);
+        ctx.fillStyle = '#f1c40f'; ctx.font = '20px Courier New'; ctx.fillText(txt("[ PRESS ENTER TO START ]", "[ TAP BUTTON A ]"), 400, 350);
         if (isKeyTapped('Enter')) setTimeout(() => currentState = STATE.CH1_INTRO, 300);
     }
 
@@ -314,7 +431,7 @@
         ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Courier New'; ctx.fillText(sub, 400, 130);
         ctx.fillStyle = '#aaa'; ctx.font = '18px Courier New';
         ctx.fillText(l1, 400, 200); ctx.fillText(l2, 400, 230); ctx.fillText(l3, 400, 260); if(l4) ctx.fillText(l4, 400, 290);
-        ctx.fillStyle = '#f1c40f'; ctx.font = '16px Courier New'; ctx.fillText("[ PRESS ENTER ]", 400, 400);
+        ctx.fillStyle = '#f1c40f'; ctx.font = '16px Courier New'; ctx.fillText(txt("[ PRESS ENTER ]", "[ TAP BUTTON A ]"), 400, 400);
         if (isKeyTapped('Enter')) {
             setTimeout(() => {
                 if(currentState === STATE.CH1_INTRO) { levelStartScore = score; currentState = STATE.CH1_GAME; }
@@ -350,7 +467,7 @@
         ctx.fillStyle = '#fff'; ctx.font = 'bold 30px Courier New'; ctx.fillText(prison, 400, 220);
         ctx.font = '20px Courier New'; ctx.fillText("Year: " + year, 400, 260);
         ctx.fillStyle = '#888'; ctx.fillText(details, 400, 300);
-        ctx.fillStyle = '#f1c40f'; ctx.font = '16px Courier New'; ctx.fillText("[ PRESS ENTER ]", 400, 380);
+        ctx.fillStyle = '#f1c40f'; ctx.font = '16px Courier New'; ctx.fillText(txt("[ PRESS ENTER ]", "[ TAP BUTTON A ]"), 400, 380);
         if (isKeyTapped('Enter')) {
              if(currentState === STATE.CH1_JAIL) currentState = STATE.CH1_HISTORY;
              if(currentState === STATE.CH6_JAIL) currentState = STATE.CH6_HISTORY;
@@ -365,7 +482,7 @@
         ctx.fillStyle = '#3498db'; ctx.font = 'bold 32px Courier New'; ctx.fillText(title, 400, 80);
         ctx.fillStyle = '#ddd'; ctx.font = '18px Courier New';
         ctx.fillText(l1, 400, 160); ctx.fillText(l2, 400, 190); ctx.fillText(l3, 400, 220); ctx.fillText(l4, 400, 250);
-        ctx.fillStyle = '#3498db'; ctx.font = '16px Courier New'; ctx.fillText("[ PRESS ENTER TO CONTINUE ]", 400, 380);
+        ctx.fillStyle = '#3498db'; ctx.font = '16px Courier New'; ctx.fillText(txt("[ PRESS ENTER TO CONTINUE ]", "[ TAP BUTTON A ]"), 400, 380);
         if (isKeyTapped('Enter')) {
             setTimeout(() => {
                 if(currentState === STATE.CH1_HISTORY) currentState = STATE.CH2_INTRO;
@@ -390,7 +507,7 @@
         ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Courier New'; ctx.fillText("COPY LINK", 400, 332);
         ctx.fillStyle = '#888'; ctx.font = '16px Courier New'; 
         ctx.fillText("Share the legend with friends.", 400, 380);
-        ctx.fillText("Press ENTER to Play Again", 400, 420);
+        ctx.fillText(txt("Press ENTER to Play Again", "TAP BUTTON A to Play Again"), 400, 420);
         if (isKeyTapped('Enter')) { resetGame(); currentState = STATE.MENU; }
     }
 
@@ -401,25 +518,40 @@
         chapEl.innerText = "CH 1: BROKER (LIVES: " + c0.lives + ")";
         if (c0.bustedState === 1) { ctx.fillStyle = 'rgba(231, 76, 60, 0.95)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 40px Courier New'; ctx.fillText("POLICE WARNING!", 400, 180); ctx.fillStyle = 'yellow'; ctx.font = 'italic 25px Courier New'; ctx.fillText('"' + currentQuote + '"', 400, 230); ctx.fillStyle = '#fff'; ctx.font = '20px Courier New'; ctx.fillText("Lives Remaining: " + c0.lives, 400, 280); c0.bustedTimer--; if (c0.bustedTimer <= 0) { c0.x = 400; c0.y = 225; c0.cops = []; c0.items = []; c0.bustedState = 0; } return; } else if (c0.bustedState === 2) { ctx.fillStyle = 'rgba(192, 57, 43, 1.0)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 40px Courier New'; ctx.fillText("CAPTURED!", 400, 180); ctx.fillStyle = 'yellow'; ctx.font = 'italic 25px Courier New'; ctx.fillText('"' + currentQuote + '"', 400, 230); ctx.fillStyle = '#fff'; ctx.font = '20px Courier New'; ctx.fillText("You are going to jail.", 400, 280); c0.bustedTimer--; if(c0.bustedTimer <= 0) currentState = STATE.CH1_JAIL; return; }
         ctx.fillStyle = '#2c3e50'; ctx.fillRect(0,0,800,450);
-        let move = false; if (keys['ArrowUp']) { c0.y -= 4; move = true; } if (keys['ArrowDown']) { c0.y += 4; move = true; } if (keys['ArrowLeft']) { c0.x -= 4; move = true; } if (keys['ArrowRight']) { c0.x += 4; move = true; } c0.x = Math.max(20, Math.min(780, c0.x)); c0.y = Math.max(20, Math.min(430, c0.y)); drawToma(c0.x, c0.y, 1, move ? Math.floor(Date.now()/50) : 0, true);
+        let move = false; if (keys['ArrowUp']) { c0.y -= 4; move = true; } if (keys['ArrowDown']) { c0.y += 4; move = true; } if (keys['ArrowLeft']) { c0.x -= 4; move = true; } if (keys['ArrowRight']) { c0.x += 4; move = true; } c0.x = Math.max(20, Math.min(780, c0.x)); c0.y = Math.max(20, Math.min(430, c0.y)); 
+        let frame = move ? Math.floor(Date.now()/50) : 0;
+        drawToma(c0.x, c0.y, 1, frame, true);
         c0.timer++; if (c0.timer % 60 === 0) c0.items.push({x: Math.random()*760+20, y: Math.random()*410+20}); if (c0.timer % 120 === 0) c0.cops.push({x: Math.random() < 0.5 ? 0 : 800, y: Math.random()*450, dx: Math.random()*4-2, dy: Math.random()*4-2});
         ctx.fillStyle = '#2ecc71'; c0.items.forEach((it, i) => { ctx.fillRect(it.x, it.y, 15, 10); if (Math.abs(c0.x - it.x) < 20 && Math.abs(c0.y - it.y) < 30) { c0.items.splice(i, 1); score += 100; } });
-        c0.cops.forEach(cop => { cop.x += cop.dx; cop.y += cop.dy; if (cop.x < 0 || cop.x > 800) cop.dx *= -1; if (cop.y < 0 || cop.y > 450) cop.dy *= -1; drawGuard(cop.x, cop.y, cop.dx < 0, false); if (Math.abs(c0.x - cop.x) < 20 && Math.abs(c0.y - cop.y) < 30) { currentQuote = getQuote(); c0.lives--; if (c0.lives > 0) { c0.bustedState = 1; c0.bustedTimer = 120; } else { c0.bustedState = 2; c0.bustedTimer = 180; } } }); ctx.fillStyle = 'red'; for(let i=0; i<c0.lives; i++) ctx.fillRect(20 + (i*30), 400, 20, 20);
+        c0.cops.forEach(cop => { cop.x += cop.dx; cop.y += cop.dy; if (cop.x < 0 || cop.x > 800) cop.dx *= -1; if (cop.y < 0 || cop.y > 450) cop.dy *= -1; 
+        drawGuard(cop.x, cop.y, cop.dx < 0, false, frame);
+        if (Math.abs(c0.x - cop.x) < 20 && Math.abs(c0.y - cop.y) < 30) { currentQuote = getQuote(); c0.lives--; if (c0.lives > 0) { c0.bustedState = 1; c0.bustedTimer = 120; } else { c0.bustedState = 2; c0.bustedTimer = 180; } } }); ctx.fillStyle = 'red'; for(let i=0; i<c0.lives; i++) ctx.fillRect(20 + (i*30), 400, 20, 20);
     }
 
     // 2. TERNI
     function playTerni() {
         chapEl.innerText = "CH 2: TERNI";
-        if (c1.bustedTimer > 0) { ctx.fillStyle = 'rgba(192, 57, 43, 1.0)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 50px Courier New'; ctx.fillText("BUSTED!", 400, 150); ctx.fillStyle = 'yellow'; ctx.font = 'italic 25px Courier New'; ctx.fillText('"' + currentQuote + '"', 400, 200); ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 20px Courier New'; ctx.fillText("SENTENCE INCREASED", 400, 250); ctx.fillStyle = '#fff'; ctx.fillText("REP LOST: -50", 400, 290); c1.bustedTimer--; if(c1.bustedTimer <= 0) { c1.playerX = 50; c1.isClimbing = false; c1.wallHeight = 0; } return; }
+        if (c1.bustedTimer > 0) { ctx.fillStyle = 'rgba(192, 57, 43, 1.0)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 50px Courier New'; ctx.fillText("BUSTED!", 400, 150); ctx.fillStyle = 'yellow'; ctx.font = 'italic 25px Courier New'; ctx.fillText('"' + currentQuote + '"', 400, 200); ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 20px Courier New'; ctx.fillText("SENTENCE INCREASED", 400, 250); ctx.fillStyle = '#fff'; ctx.fillText("REP LOST: -50", 400, 290); c1.bustedTimer--; if(c1.bustedTimer <= 0) { 
+            c1.playerX = 50; c1.isClimbing = false; c1.wallHeight = 0; 
+            score = levelStartScore - 50; // SNAPSHOT RESET
+        } return; }
         
         ctx.fillStyle = '#27ae60'; ctx.fillRect(0, 0, 800, 350);
-        // Goals - FIXED (White)
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 4;
-        ctx.strokeRect(20, 100, 20, 100); // Left Goal
-        ctx.strokeRect(660, 100, 20, 100); // Right Goal (Inside Wall)
-        
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeRect(20, 100, 20, 100); ctx.strokeRect(660, 100, 20, 100); 
         c1.soccerTimer++; let p1x = 100 + Math.sin(c1.soccerTimer * 0.05) * 50; let p2x = 300 + Math.cos(c1.soccerTimer * 0.05) * 50; let ballx = (p1x + p2x) / 2; drawToma(p1x, 100, 0.8, c1.soccerTimer); drawToma(p2x, 120, 0.8, c1.soccerTimer+10); ctx.fillStyle = '#fff'; ctx.fillRect(ballx, 115, 6, 6); 
-        ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 350, 800, 100); ctx.fillStyle = '#7f8c8d'; ctx.fillRect(700, 50, 50, 300); c1.guardTimer++; if (c1.guardTimer > c1.nextSwitch) { c1.guardLooking = !c1.guardLooking; c1.guardTimer = 0; c1.nextSwitch = c1.guardLooking ? Math.random()*100 + 60 : Math.random()*150 + 100; } drawGuard(650, 300, true, c1.guardLooking); if (!c1.isClimbing) { if (keys['ArrowRight']) { if (c1.guardLooking) { currentQuote = getQuote(); c1.bustedTimer = 150; score -= 50; keys['ArrowRight'] = false; } c1.playerX += 3; } drawToma(c1.playerX, 300, 1.5, Math.floor(Date.now()/100)); if (c1.playerX > 680) c1.isClimbing = true; } else { drawToma(710, 300 - c1.wallHeight, 1.5, c1.wallHeight); if (isKeyTapped('Space')) { c1.wallHeight += 20; score += 10; } c1.wallHeight -= 0.6; if(c1.wallHeight < 0) c1.wallHeight = 0; if (c1.wallHeight > 250) { score += 500; currentState = STATE.CH2_WIN; } }
+        ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 350, 800, 100); ctx.fillStyle = '#7f8c8d'; ctx.fillRect(700, 50, 50, 300); c1.guardTimer++; if (c1.guardTimer > c1.nextSwitch) { c1.guardLooking = !c1.guardLooking; c1.guardTimer = 0; c1.nextSwitch = c1.guardLooking ? Math.random()*100 + 60 : Math.random()*150 + 100; } drawGuard(650, 300, true, c1.guardLooking); 
+        
+        if (!c1.isClimbing) { 
+            let frame = 0;
+            if (keys['ArrowRight']) { frame = c1.soccerTimer; if (c1.guardLooking) { currentQuote = getQuote(); c1.bustedTimer = 150; keys['ArrowRight'] = false; } c1.playerX += 3; } 
+            drawToma(c1.playerX, 300, 1.5, frame); 
+            if (c1.playerX > 680) c1.isClimbing = true; 
+        } else { 
+            drawToma(710, 300 - c1.wallHeight, 1.5, c1.wallHeight); 
+            if (isKeyTapped('ArrowUp')) { c1.wallHeight += 20; score += 10; } 
+            c1.wallHeight -= 0.6; if(c1.wallHeight < 0) c1.wallHeight = 0; 
+            if (c1.wallHeight > 250) { score += 500; currentState = STATE.CH2_WIN; } 
+        }
     }
 
     // 3. FUGITIVE
@@ -432,19 +564,45 @@
     // 4. CANTEEN
     function playCanteen() {
         chapEl.innerText = "CH 4: EGGS (" + c15.eggsCollected + "/5)";
-        if (c15.bustedTimer > 0) { ctx.fillStyle = 'rgba(231, 76, 60, 0.9)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 40px Courier New'; ctx.fillText("COOK SAW YOU!", 400, 150); ctx.fillStyle = 'yellow'; ctx.font = 'italic 25px Courier New'; ctx.fillText('"' + currentQuote + '"', 400, 200); ctx.fillStyle = '#fff'; ctx.font = '20px Courier New'; ctx.fillText("REP LOST: -200", 400, 250); c15.bustedTimer--; if(c15.bustedTimer <= 0) { c15.x = 400; c15.y = 400; c15.eggsCollected = 0; c15.eggLocs.forEach(e => e.taken = false); c15.cookState = 0; c15.cookTimer = 0; } return; }
-        ctx.fillStyle = '#d35400'; ctx.fillRect(0,0,800,450); for(let i=0; i<800; i+=50) for(let j=0; j<450; j+=50) if((i+j)%100 === 0) { ctx.fillStyle = '#e67e22'; ctx.fillRect(i,j,50,50); } c15.cookTimer++; if (c15.cookState === 0 && c15.cookTimer > 180) { c15.cookState = 1; c15.cookTimer = 0; } else if (c15.cookState === 1 && c15.cookTimer > 40) { c15.cookState = 2; c15.cookTimer = 0; } else if (c15.cookState === 2 && c15.cookTimer > 120) { c15.cookState = 0; c15.cookTimer = 0; } ctx.fillStyle = '#fff'; if (c15.cookState === 0) { ctx.fillRect(380, 20, 40, 60); ctx.fillStyle = '#27ae60'; ctx.fillText("COOKING...", 370, 100); } else if (c15.cookState === 1) { ctx.fillRect(380, 20, 40, 60); ctx.fillStyle = 'yellow'; ctx.fillText("TURNING...", 370, 100); } else { ctx.fillRect(380, 20, 40, 60); ctx.fillStyle = '#ecf0f1'; ctx.fillRect(380, 5, 40, 30); ctx.fillStyle = '#e74c3c'; ctx.fillRect(385, 25, 10, 5); ctx.fillRect(405, 25, 10, 5); ctx.fillText("LOOKING!", 370, 100); } ctx.fillStyle = '#8e44ad'; let tables = [{x:100,y:150}, {x:300,y:150}, {x:500,y:150}, {x:100,y:300}, {x:300,y:300}, {x:500,y:300}]; tables.forEach(t => ctx.fillRect(t.x, t.y, 100, 60)); c15.eggLocs.forEach(e => { if(!e.taken) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(e.x, e.y, 8, 10, 0, 0, Math.PI*2); ctx.fill(); }}); let speed = 4; let moving = false; if (keys['ArrowUp']) { c15.y -= speed; moving = true; } if (keys['ArrowDown']) { c15.y += speed; moving = true; } if (keys['ArrowLeft']) { c15.x -= speed; moving = true; } if (keys['ArrowRight']) { c15.x += speed; moving = true; } c15.y = Math.max(120, Math.min(410, c15.y)); c15.x = Math.max(20, Math.min(780, c15.x)); drawToma(c15.x, c15.y, 1); c15.eggLocs.forEach(e => { if(!e.taken && Math.abs(c15.x - e.x) < 20 && Math.abs(c15.y - e.y) < 20) { e.taken = true; c15.eggsCollected++; score += 500; }}); if (c15.cookState === 2 && moving) { currentQuote = getQuote(); c15.bustedTimer = 120; score -= 200; } if (c15.eggsCollected >= 5) { currentState = STATE.CH4_WIN; }
+        if (c15.bustedTimer > 0) { ctx.fillStyle = 'rgba(231, 76, 60, 0.9)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 40px Courier New'; ctx.fillText("COOK SAW YOU!", 400, 150); ctx.fillStyle = 'yellow'; ctx.font = 'italic 25px Courier New'; ctx.fillText('"' + currentQuote + '"', 400, 200); ctx.fillStyle = '#fff'; ctx.font = '20px Courier New'; ctx.fillText("REP LOST: -200", 400, 250); c15.bustedTimer--; if(c15.bustedTimer <= 0) { 
+            c15.x = 400; c15.y = 400; c15.eggsCollected = 0; c15.eggLocs.forEach(e => e.taken = false); c15.cookState = 0; c15.cookTimer = 0; 
+            score = levelStartScore - 200; // SNAPSHOT RESET
+        } return; }
+        ctx.fillStyle = '#d35400'; ctx.fillRect(0,0,800,450); for(let i=0; i<800; i+=50) for(let j=0; j<450; j+=50) if((i+j)%100 === 0) { ctx.fillStyle = '#e67e22'; ctx.fillRect(i,j,50,50); } c15.cookTimer++; if (c15.cookState === 0 && c15.cookTimer > 180) { c15.cookState = 1; c15.cookTimer = 0; } else if (c15.cookState === 1 && c15.cookTimer > 40) { c15.cookState = 2; c15.cookTimer = 0; } else if (c15.cookState === 2 && c15.cookTimer > 120) { c15.cookState = 0; c15.cookTimer = 0; } ctx.fillStyle = '#fff'; if (c15.cookState === 0) { ctx.fillRect(380, 20, 40, 60); ctx.fillStyle = '#27ae60'; ctx.fillText("COOKING...", 370, 100); } else if (c15.cookState === 1) { ctx.fillRect(380, 20, 40, 60); ctx.fillStyle = 'yellow'; ctx.fillText("TURNING...", 370, 100); } else { ctx.fillRect(380, 20, 40, 60); ctx.fillStyle = '#ecf0f1'; ctx.fillRect(380, 5, 40, 30); ctx.fillStyle = '#e74c3c'; ctx.fillRect(385, 25, 10, 5); ctx.fillRect(405, 25, 10, 5); ctx.fillText("LOOKING!", 370, 100); } ctx.fillStyle = '#8e44ad'; let tables = [{x:100,y:150}, {x:300,y:150}, {x:500,y:150}, {x:100,y:300}, {x:300,y:300}, {x:500,y:300}]; tables.forEach(t => ctx.fillRect(t.x, t.y, 100, 60)); c15.eggLocs.forEach(e => { if(!e.taken) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(e.x, e.y, 8, 10, 0, 0, Math.PI*2); ctx.fill(); }}); 
+        
+        let speed = 4; let moving = false; 
+        if (keys['ArrowUp']) { c15.y -= speed; moving = true; } if (keys['ArrowDown']) { c15.y += speed; moving = true; } if (keys['ArrowLeft']) { c15.x -= speed; moving = true; } if (keys['ArrowRight']) { c15.x += speed; moving = true; } 
+        c15.y = Math.max(120, Math.min(410, c15.y)); c15.x = Math.max(20, Math.min(780, c15.x)); 
+        
+        let frame = moving ? Math.floor(Date.now()/50) : 0;
+        drawToma(c15.x, c15.y, 1, frame); 
+        c15.eggLocs.forEach(e => { if(!e.taken && Math.abs(c15.x - e.x) < 20 && Math.abs(c15.y - e.y) < 20) { e.taken = true; c15.eggsCollected++; score += 500; }}); if (c15.cookState === 2 && moving) { currentQuote = getQuote(); c15.bustedTimer = 120; } if (c15.eggsCollected >= 5) { currentState = STATE.CH4_WIN; }
     }
 
     // 5. PARMA
     function playParma() {
         chapEl.innerText = "CH 5: PARMA";
-        if (c2.bustedTimer > 0) { ctx.fillStyle = 'rgba(192, 57, 43, 1.0)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 50px Courier New'; ctx.fillText("BUSTED!", 400, 150); ctx.fillStyle = 'yellow'; ctx.font = 'italic 25px Courier New'; ctx.fillText('"' + currentQuote + '"', 400, 200); ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 20px Courier New'; ctx.fillText("NOISE LEVEL CRITICAL", 400, 250); ctx.fillStyle = '#fff'; ctx.fillText("REP LOST: -100", 400, 290); c2.bustedTimer--; if(c2.bustedTimer <= 0) { c2.sawProgress = 0; c2.noise = 0; } return; }
-        ctx.fillStyle = '#34495e'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#111'; ctx.fillRect(600, 150, 100, 150); ctx.fillStyle = '#95a5a6'; ctx.fillRect(620, 150, 10, 150); ctx.fillStyle = (c2.sawProgress > 90) ? '#d35400' : '#7f8c8d'; ctx.fillRect(660, 150, 10, 150); c2.guardX += 2 * c2.guardDir; if(c2.guardX > 750 || c2.guardX < 0) c2.guardDir *= -1; drawGuard(c2.guardX, 350, c2.guardDir === -1, true); drawToma(550, 350, 1.5);
+        if (c2.bustedTimer > 0) { ctx.fillStyle = 'rgba(192, 57, 43, 1.0)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 50px Courier New'; ctx.fillText("BUSTED!", 400, 150); ctx.fillStyle = 'yellow'; ctx.font = 'italic 25px Courier New'; ctx.fillText('"' + currentQuote + '"', 400, 200); ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 20px Courier New'; ctx.fillText("NOISE LEVEL CRITICAL", 400, 250); ctx.fillStyle = '#fff'; ctx.fillText("REP LOST: -100", 400, 290); c2.bustedTimer--; if(c2.bustedTimer <= 0) { 
+            c2.sawProgress = 0; c2.noise = 0;
+            score = levelStartScore - 100; // SNAPSHOT RESET 
+        } return; }
+        ctx.fillStyle = '#34495e'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#111'; ctx.fillRect(600, 150, 100, 150); ctx.fillStyle = '#95a5a6'; ctx.fillRect(620, 150, 10, 150); ctx.fillStyle = (c2.sawProgress > 90) ? '#d35400' : '#7f8c8d'; ctx.fillRect(660, 150, 10, 150); 
+        c2.guardX += 2 * c2.guardDir; if(c2.guardX > 750 || c2.guardX < 0) c2.guardDir *= -1; 
+        
+        let frame = Math.floor(Date.now()/100);
+        drawGuard(c2.guardX, 350, c2.guardDir === -1, true, frame); 
+        drawToma(550, 350, 1.5, c2.isSawing ? frame : 0);
+
         let safe = Math.abs(c2.guardX - 550) > 180; if (keys['Space']) { c2.isSawing = true; c2.sawProgress += 0.15; c2.noise += 0.9; score += 1; c2.pasteDelay = 60; ctx.fillStyle = 'yellow'; ctx.fillRect(655 + Math.random()*10, 220, 3, 3); } else { c2.isSawing = false; if(c2.pasteDelay > 0) { c2.pasteDelay--; c2.noise -= 0.05; } else { c2.noise -= 0.6; } }
         
-        if (c2.noise < 0) c2.noise = 0; if (c2.noise > 100) c2.noise = 100; if (!safe && c2.noise > 30) { currentQuote = getQuote(); c2.bustedTimer = 150; score -= 100; }
-        ctx.fillStyle = '#fff'; ctx.font = '16px Courier New'; ctx.textAlign = 'left'; ctx.fillText("PROGRESS: ", 20, 30); ctx.fillStyle = '#2ecc71'; ctx.fillRect(110, 15, c2.sawProgress * 2, 15); ctx.fillStyle = '#fff'; ctx.fillText("DANGER:", 20, 60); ctx.fillStyle = c2.noise > 50 ? 'red' : 'yellow'; ctx.fillRect(110, 45, c2.noise * 2, 15);
+        if (c2.noise < 0) c2.noise = 0; if (c2.noise > 100) c2.noise = 100; if (!safe && c2.noise > 30) { currentQuote = getQuote(); c2.bustedTimer = 150; }
+        ctx.fillStyle = '#fff'; ctx.font = '16px Courier New'; ctx.textAlign = 'left'; 
+        ctx.fillText("PROGRESS:", 20, 30);
+        ctx.fillStyle = '#333'; ctx.fillRect(130, 15, 200, 15);
+        ctx.fillStyle = '#2ecc71'; ctx.fillRect(130, 15, c2.sawProgress * 2, 15);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(130, 15, 200, 15);
+        
+        ctx.fillStyle = '#fff'; ctx.fillText("DANGER:", 20, 60); ctx.fillStyle = c2.noise > 50 ? 'red' : 'yellow'; ctx.fillRect(130, 45, c2.noise * 2, 15);
         if (c2.sawProgress >= 100) { score += 1000; currentState = STATE.CH5_WIN; }
     }
 
@@ -455,7 +613,6 @@
             ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,800,450); 
             ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center'; ctx.font = 'bold 40px Courier New'; 
             ctx.fillText("CRASHED!", 400, 150); 
-            // FUNNY QUOTE ADDED HERE (Crash fix)
             ctx.fillStyle = 'yellow'; ctx.font = 'italic 20px Courier New';
             ctx.fillText('"' + currentQuote + '"', 400, 200);
             ctx.fillStyle = '#fff'; ctx.font = '20px Courier New'; 
@@ -497,7 +654,6 @@
         if (c4.descent > 3000) currentState = STATE.CH7_WIN;
     }
 
-    loop();
 </script>
 </body>
 </html>
