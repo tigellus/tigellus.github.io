@@ -8,19 +8,28 @@
         body {
             background-color: #050505;
             margin: 0;
-            min-height: 120vh; /* Allow scroll to hide address bar */
+            min-height: 120vh; /* Taller than screen to force scroll ability */
             overflow-y: auto; 
             touch-action: pan-y; 
             font-family: 'Courier New', Courier, monospace;
+            
+            /* Center content via Body, not a fixed wrapper */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         #game-layer {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
+            /* CHANGED: From fixed to relative so it moves with the scroll */
+            position: relative; 
+            width: 100%; 
+            height: 100vh; /* Fill the view */
+            display: flex; 
+            flex-direction: column;
+            align-items: center; 
+            justify-content: center;
             z-index: 1;
-            pointer-events: none;
         }
         
         canvas {
@@ -229,8 +238,14 @@
         e.preventDefault();
         joyActive = false;
         joyKnob.style.transform = `translate(-50%, -50%)`;
+        
+        // Reset Inputs
         keys['ArrowUp'] = false; keys['ArrowDown'] = false;
         keys['ArrowLeft'] = false; keys['ArrowRight'] = false;
+        
+        // THE FIX: Reset "Tap" trackers so the game knows you let go
+        keysPressed['ArrowUp'] = false; keysPressed['ArrowDown'] = false;
+        keysPressed['ArrowLeft'] = false; keysPressed['ArrowRight'] = false;
     });
 
     // --- ACTION BUTTON ---
