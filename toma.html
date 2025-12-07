@@ -3,30 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>THE GHOST OF EUROPE: v10.2</title>
+    <title>THE GHOST OF EUROPE: v12.1 (CONTROLS FIXED)</title>
     <style>
         body {
             background-color: #050505;
             margin: 0;
-            /* THE FIX: Make body taller than screen to allow browser UI hiding */
-            min-height: 120vh; 
+            min-height: 120vh; /* Allow scroll to hide address bar */
             overflow-y: auto; 
-            touch-action: pan-y; /* Allow vertical swipe */
+            touch-action: pan-y; 
             font-family: 'Courier New', Courier, monospace;
         }
 
-        /* NEW WRAPPER: Keeps the game centered and pinned while body scrolls behind it */
         #game-layer {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
             z-index: 1;
+            pointer-events: none;
         }
         
         canvas {
@@ -36,8 +30,9 @@
             image-rendering: pixelated;
             cursor: crosshair;
             max-width: 100%;
-            max-height: 80vh; /* Leave room for controls */
+            max-height: 80vh; 
             display: block;
+            pointer-events: auto;
         }
 
         .ui-overlay {
@@ -56,46 +51,49 @@
         .score { color: #f1c40f; font-weight: bold; font-size: 20px; }
         .chapter { color: #bdc3c7; font-weight: bold; text-transform: uppercase; font-size: 16px; }
 
-        /* MOBILE CONTROLS */
+        /* --- MOBILE CONTROLS --- */
         #mobileControls {
             display: none;
-            position: absolute;
+            position: fixed;
             bottom: 20px;
             width: 100%;
-            height: 140px;
-            pointer-events: none;
-            z-index: 20;
+            height: 160px;
+            z-index: 100;
             justify-content: space-between;
-            padding: 0 30px;
+            padding: 0 40px;
             box-sizing: border-box;
+            pointer-events: none;
         }
 
-        .dpad {
+        #joystick-base {
             position: relative;
-            width: 140px;
-            height: 140px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
             pointer-events: auto;
+            backdrop-filter: blur(4px);
+            touch-action: none; 
         }
 
-        .d-btn {
+        #joystick-knob {
             position: absolute;
-            background: rgba(255, 255, 255, 0.15);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 12px;
-            width: 45px;
-            height: 45px;
-            backdrop-filter: blur(4px);
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            pointer-events: none;
         }
-        .d-btn:active { background: rgba(255, 255, 255, 0.5); }
-        .d-up { top: 0; left: 48px; }
-        .d-down { bottom: 0; left: 48px; }
-        .d-left { top: 48px; left: 0; }
-        .d-right { top: 48px; right: 0; }
 
         .action-btn {
             pointer-events: auto;
-            width: 90px;
-            height: 90px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             background: rgba(231, 76, 60, 0.4);
             border: 4px solid rgba(231, 76, 60, 0.8);
@@ -105,12 +103,13 @@
             color: white;
             font-weight: bold;
             font-size: 24px;
-            margin-top: 25px;
+            margin-top: 10px;
             backdrop-filter: blur(4px);
+            touch-action: none;
+            transition: transform 0.1s;
         }
-        .action-btn:active { background: rgba(231, 76, 60, 0.9); transform: scale(0.95); }
+        .action-btn.pressed { background: rgba(231, 76, 60, 0.9); transform: scale(0.9); }
 
-        /* Show controls on small screens or touch devices */
         @media (max-width: 1024px), (pointer: coarse) {
             #mobileControls { display: flex; }
         }
@@ -125,16 +124,13 @@
     </div>
 
     <canvas id="gameCanvas" width="800" height="450"></canvas>
+</div>
 
-    <div id="mobileControls">
-        <div class="dpad">
-            <div class="d-btn d-up" data-key="ArrowUp"></div>
-            <div class="d-btn d-down" data-key="ArrowDown"></div>
-            <div class="d-btn d-left" data-key="ArrowLeft"></div>
-            <div class="d-btn d-right" data-key="ArrowRight"></div>
-        </div>
-        <div class="action-btn" id="btnA" data-key="Space">A</div>
+<div id="mobileControls">
+    <div id="joystick-base">
+        <div id="joystick-knob"></div>
     </div>
+    <div class="action-btn" id="btnA" data-key="Space">A</div>
 </div>
 
 <script>
@@ -144,10 +140,14 @@
     const chapEl = document.getElementById('chapterDisplay');
     const controlsDiv = document.getElementById('mobileControls');
 
+    // Joystick Elements
+    const joyBase = document.getElementById('joystick-base');
+    const joyKnob = document.getElementById('joystick-knob');
+    const btnA = document.getElementById('btnA');
+
     // --- GAME STATE ---
     const STATE = {
-        CHALLENGE: -1,
-        WARNING: 0, MENU: 1,
+        CHALLENGE: -1, WARNING: 0, MENU: 1,
         
         CH1_INTRO: 5, CH1_GAME: 6, CH1_JAIL: 7, CH1_HISTORY: 8,
         CH2_INTRO: 10, CH2_GAME: 11, CH2_WIN: 115, CH2_HISTORY: 12,
@@ -165,7 +165,6 @@
     let levelStartScore = 0;
     let challengerScore = 0;
     
-    // FUNNY QUOTES
     const QUOTES = [
         "Mamma Mia! Not today!", "Enjoy the risotto in jail!", "Ciao Bello! You are busted!",
         "My grandmother runs faster!", "No pizza for you tonight!", "The Carabinieri send regards!",
@@ -175,21 +174,6 @@
         "You call that an escape?", "Pasta la vista, baby!", "You are grounded, mister!"
     ];
     let currentQuote = "";
-
-    // --- INITIALIZATION ---
-    window.onload = function() {
-        // Auto-scroll attempt to hide address bar
-        window.scrollTo(0, 1);
-        
-        const urlParams = new URLSearchParams(window.location.search);
-        if(urlParams.has('score')) {
-            challengerScore = parseInt(urlParams.get('score')) || 0;
-            currentState = STATE.CHALLENGE;
-        } else {
-            currentState = STATE.WARNING;
-        }
-        loop(); 
-    };
 
     // --- INPUT ---
     const keys = {};
@@ -204,21 +188,66 @@
         keysPressed[e.code] = false; 
     });
 
-    const touchButtons = document.querySelectorAll('.d-btn, .action-btn');
-    touchButtons.forEach(btn => {
-        btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const key = btn.getAttribute('data-key');
-            keys[key] = true;
-            if(key === 'Space') keys['Enter'] = true; 
-        });
-        btn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            const key = btn.getAttribute('data-key');
-            keys[key] = false;
-            keysPressed[key] = false;
-            if(key === 'Space') { keys['Enter'] = false; keysPressed['Enter'] = false; }
-        });
+    // --- JOYSTICK LOGIC ---
+    let joyActive = false;
+    const maxRadius = 40; 
+
+    function handleJoystick(touch) {
+        const rect = joyBase.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        const deltaX = touch.clientX - centerX;
+        const deltaY = touch.clientY - centerY;
+        const distance = Math.min(Math.sqrt(deltaX*deltaX + deltaY*deltaY), maxRadius);
+        const angle = Math.atan2(deltaY, deltaX);
+
+        const knobX = Math.cos(angle) * distance;
+        const knobY = Math.sin(angle) * distance;
+        joyKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
+
+        const threshold = 10;
+        keys['ArrowUp'] = false; keys['ArrowDown'] = false;
+        keys['ArrowLeft'] = false; keys['ArrowRight'] = false;
+
+        if (deltaY < -threshold) keys['ArrowUp'] = true;
+        if (deltaY > threshold) keys['ArrowDown'] = true;
+        if (deltaX < -threshold) keys['ArrowLeft'] = true;
+        if (deltaX > threshold) keys['ArrowRight'] = true;
+    }
+
+    joyBase.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        joyActive = true;
+        handleJoystick(e.touches[0]);
+    });
+    joyBase.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (joyActive) handleJoystick(e.touches[0]);
+    });
+    joyBase.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        joyActive = false;
+        joyKnob.style.transform = `translate(-50%, -50%)`;
+        keys['ArrowUp'] = false; keys['ArrowDown'] = false;
+        keys['ArrowLeft'] = false; keys['ArrowRight'] = false;
+    });
+
+    // --- ACTION BUTTON ---
+    btnA.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        btnA.classList.add('pressed');
+        keys['Space'] = true;
+        keys['Enter'] = true;
+    });
+    btnA.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        btnA.classList.remove('pressed');
+        keys['Space'] = false;
+        keys['Enter'] = false;
+        keysPressed['Enter'] = false;
+        // Fix for Tap logic
+        keysPressed['Space'] = false; 
     });
 
     function isKeyTapped(code) {
@@ -229,13 +258,8 @@
         return false;
     }
 
-    function checkMobile() {
-        return getComputedStyle(controlsDiv).display !== 'none';
-    }
-
-    function txt(desktop, mobile) {
-        return checkMobile() ? mobile : desktop;
-    }
+    function checkMobile() { return getComputedStyle(controlsDiv).display !== 'none'; }
+    function txt(desktop, mobile) { return checkMobile() ? mobile : desktop; }
 
     function handleScreenClick(clientX, clientY) {
         if(currentState === STATE.FINAL_SCORE) {
@@ -247,12 +271,22 @@
             if(x > 250 && x < 550 && y > 300 && y < 350) copyLink();
         }
     }
-    // Listen on window to catch clicks passing through overlay
     window.addEventListener('mousedown', e => handleScreenClick(e.clientX, e.clientY));
     window.addEventListener('touchstart', e => {
-        const touch = e.touches[0];
-        handleScreenClick(touch.clientX, touch.clientY);
+        if (!joyActive && e.target !== btnA) handleScreenClick(e.touches[0].clientX, e.touches[0].clientY);
     });
+
+    window.onload = function() {
+        window.scrollTo(0, 1);
+        const urlParams = new URLSearchParams(window.location.search);
+        if(urlParams.has('score')) {
+            challengerScore = parseInt(urlParams.get('score')) || 0;
+            currentState = STATE.CHALLENGE;
+        } else {
+            currentState = STATE.WARNING;
+        }
+        loop(); 
+    };
 
     function resetGame() {
         score = 0; levelStartScore = 0;
@@ -285,9 +319,7 @@
     // --- DRAWING HELPERS ---
     function drawToma(x, y, scale = 1, animFrame = 0, suit = false, hanging = false) {
         ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
-        // Bobbing Anim
         if(animFrame > 0 && !hanging) ctx.translate(0, (Math.floor(animFrame/5)%2===0) ? -2 : 0);
-
         ctx.fillStyle = suit ? '#2c3e50' : '#95a5a6'; ctx.fillRect(0, 0, 20, 40);
         if(!suit) { ctx.fillStyle = '#2c3e50'; for(let i=10; i<40; i+=10) ctx.fillRect(0, i, 20, 4); } 
         else { ctx.fillStyle = '#c0392b'; ctx.fillRect(8, 5, 4, 15); }
@@ -298,12 +330,10 @@
             ctx.fillRect(2, 40, 6, 15); ctx.fillRect(12, 40, 6, 15);
             ctx.fillStyle = '#eebb99'; ctx.fillRect(-2, -5, 4, 15); ctx.fillRect(18, -5, 4, 15);
         } else {
-            if (animFrame > 0) { // Fast legs
+            if (animFrame > 0) {
                 if (Math.floor(animFrame / 4) % 2 === 0) { ctx.fillRect(0, 38, 8, 12); ctx.fillRect(14, 38, 4, 8); } 
                 else { ctx.fillRect(4, 38, 4, 8); ctx.fillRect(12, 38, 8, 12); }
-            } else {
-                ctx.fillRect(2, 38, 6, 12); ctx.fillRect(12, 38, 6, 12);
-            }
+            } else { ctx.fillRect(2, 38, 6, 12); ctx.fillRect(12, 38, 6, 12); }
         }
         ctx.restore();
     }
@@ -311,7 +341,6 @@
     function drawGuard(x, y, lookingLeft, hasCone = true, animFrame = 0) {
         ctx.save(); ctx.translate(x, y);
         if(animFrame > 0) ctx.translate(0, (Math.floor(animFrame/5)%2===0) ? -2 : 0);
-
         if (hasCone) {
             ctx.fillStyle = 'rgba(231, 76, 60, 0.4)'; ctx.beginPath();
             if (lookingLeft) { ctx.moveTo(0, -10); ctx.lineTo(-250, -100); ctx.lineTo(-250, 150); } 
@@ -323,14 +352,11 @@
         ctx.fillStyle = '#192a56'; ctx.fillRect(2, -16, 20, 6);
         ctx.fillStyle = '#e74c3c'; 
         if (lookingLeft) ctx.fillRect(4, -8, 4, 4); else ctx.fillRect(16, -8, 4, 4);
-        
         ctx.fillStyle = '#192a56';
         if (animFrame > 0) {
              if (Math.floor(animFrame / 6) % 2 === 0) { ctx.fillRect(0, 42, 8, 12); ctx.fillRect(16, 42, 4, 8); } 
              else { ctx.fillRect(4, 42, 4, 8); ctx.fillRect(14, 42, 8, 12); }
-        } else {
-            ctx.fillRect(2, 45, 8, 10); ctx.fillRect(14, 45, 8, 10);
-        }
+        } else { ctx.fillRect(2, 45, 8, 10); ctx.fillRect(14, 45, 8, 10); }
         ctx.restore();
     }
 
@@ -353,42 +379,34 @@
             case STATE.CHALLENGE: screenChallenge(); break;
             case STATE.WARNING: screenWarning(); break;
             case STATE.MENU: screenMenu(); break;
-            
             case STATE.CH1_INTRO: screenStory("CHAPTER 1: THE BROKER", "Before prison...", "Collect Cash (Green). Avoid Police.", "Get rich before the raid.", "2 LIVES ONLY."); break;
             case STATE.CH1_GAME: playBroker(); break;
             case STATE.CH1_JAIL: screenJail("TERNI PRISON", "2009", "MAX SECURITY WING"); break;
             case STATE.CH1_HISTORY: screenHistory("THE REALITY: 2008", "Taulant Toma was not a street dealer.", "He was a high-level logistics broker for the", "Italian Mafia, moving tons of cocaine.", "He was eventually tracked and captured."); break;
-
-            case STATE.CH2_INTRO: screenStory("CHAPTER 2: TERNI, 2009", "The Opportunity", txt("Guard looks away? RUN (Arrows).", "Guard looks away? USE D-PAD."), txt("At the wall: CLIMB (Tap UP ARROW).", "At the wall: CLIMB (Tap D-PAD UP)."), ""); break;
+            case STATE.CH2_INTRO: screenStory("CHAPTER 2: TERNI, 2009", "The Opportunity", txt("Guard looks away? RUN (Arrows).", "Guard looks away? USE JOYSTICK."), txt("At the wall: CLIMB (Tap UP ARROW).", "At the wall: MASH A BUTTON."), ""); break;
             case STATE.CH2_GAME: playTerni(); break;
             case STATE.CH2_WIN: screenStory("SUCCESS!", "Wall Scaled", "You vanished into the woods", "while the crowd cheered for the goal.", ""); break; 
             case STATE.CH2_HISTORY: screenHistory("THE REALITY: TERNI 2009", "During a prison soccer match,", "Toma waited for the guards to watch a goal.", "He scaled the perimeter wall in seconds", "and vanished into the woods."); break;
-
-            case STATE.CH3_INTRO: screenStory("CHAPTER 3: THE FUGITIVE", "On The Run (2009-2013)", "Move between Germany & Belgium.", txt("LEFT/RIGHT to switch lanes.", "D-PAD LEFT/RIGHT to switch."), "Collect Phones. Avoid Interpol.", ""); break;
+            case STATE.CH3_INTRO: screenStory("CHAPTER 3: THE FUGITIVE", "On The Run (2009-2013)", "Move between Germany & Belgium.", txt("LEFT/RIGHT to switch lanes.", "JOYSTICK LEFT/RIGHT to switch."), "Collect Phones. Avoid Interpol.", ""); break;
             case STATE.CH3_GAME: playFugitive(); break;
             case STATE.CH3_WIN: screenStory("SUCCESS!", "Network Rebuilt", "You evaded the dragnet for 3 years.", "But your luck is running out...", ""); break;
             case STATE.CH3_HISTORY: screenHistory("THE REALITY: THE GHOST", "For 3 years, Toma lived as a fugitive.", "He moved between Germany and Belgium,", "re-establishing his drug logistics empire", "before being caught and sent to Parma."); break;
-
             case STATE.CH4_INTRO: screenStory("CHAPTER 4: THE CANTEEN", "Bonus Level: The Heist", "Steal Eggs for Extra REP.", "Cook Facing UP = Safe.", "Cook Facing DOWN = FREEZE.", "Collect 5 Eggs."); break;
             case STATE.CH4_GAME: playCanteen(); break;
             case STATE.CH4_WIN: screenStory("SUCCESS!", "Ingredients Acquired", "You have enough egg whites.", "Now you can make the chemical paste", "to hide your saw cuts."); break;
             case STATE.CH4_HISTORY: screenHistory("THE REALITY: THE PREP", "In Parma, Toma needed to cut iron bars.", "To hide the cuts from daily inspection,", "he mixed egg whites with dust to create", "a paste that looked exactly like rust."); break;
-            
             case STATE.CH5_INTRO: screenStory("CHAPTER 5: PARMA, 2013", "The Sawing", txt("Hold SPACE to saw.", "Hold A to saw."), txt("Release to prepare Paste.", "Release A to Paste."), "NEW: There is a 1-second delay!", "Don't get caught."); break;
             case STATE.CH5_GAME: playParma(); break;
             case STATE.CH5_WIN: screenStory("SUCCESS!", "The Bars Are Cut", "You applied the fake rust.", "The guards noticed nothing.", "Tonight, you leave."); break;
             case STATE.CH5_HISTORY: screenHistory("THE REALITY: PARMA 2013", "On a rainy night in December,", "Toma removed the bars he had sawed", "over weeks. He descended using bedsheets", "and met armed accomplices outside."); break;
-            
-            case STATE.CH6_INTRO: screenStory("CHAPTER 6: THE GETAWAY", "Belgium Border Run", txt("Drive fast (Arrows).", "Drive fast (D-Pad)."), "Avoid Police.", "One crash ends it.", ""); break;
+            case STATE.CH6_INTRO: screenStory("CHAPTER 6: THE GETAWAY", "Belgium Border Run", txt("Drive fast (Arrows).", "Drive fast (Joystick)."), "Avoid Police.", "One crash ends it.", ""); break;
             case STATE.CH6_GAME: playDriving(); break;
             case STATE.CH6_JAIL: screenJail("OPERA PRISON", "2025", "41-bis HARD REGIME"); break;
             case STATE.CH6_HISTORY: screenHistory("THE REALITY: THE MANHUNT", "Toma remained a ghost for 8 months.", "He was eventually cornered by Special Forces", "in Liège, Belgium. He did not fight back.", "He was returned to Italy."); break;
-            
-            case STATE.CH7_INTRO: screenStory("CHAPTER 7: OPERA, 2025", "The Impossible Escape", "You sawed the bars again.", "Now, the Laser Wall.", txt("Hold DOWN to Slide. UP to Brake.", "D-PAD DOWN Slide. UP Brake."), "Don't touch Lasers. Don't move in Light."); break;
+            case STATE.CH7_INTRO: screenStory("CHAPTER 7: OPERA, 2025", "The Impossible Escape", "You sawed the bars again.", "Now, the Laser Wall.", txt("Hold DOWN to Slide. UP to Brake.", "JOYSTICK DOWN Slide. UP Brake."), "Don't touch Lasers. Don't move in Light."); break;
             case STATE.CH7_GAME: playOpera(); break;
             case STATE.CH7_WIN: screenStory("SUCCESS!", "LEGEND STATUS", "You crossed the perimeter.", "The Audi RS6 is waiting.", "You are gone."); break;
             case STATE.CH7_HISTORY: screenHistory("THE REALITY: DEC 7, 2025", "Toma escaped the 'inescapable' Opera prison.", "He used his signature sawing technique.", "Police suspect a drone delivered the tools", "and external clans hacked the sensors."); break;
-
             case STATE.FINAL_SCORE: screenFinal(); break;
         }
         requestAnimationFrame(loop);
@@ -564,7 +582,8 @@
             if (c1.playerX > 680) c1.isClimbing = true; 
         } else { 
             drawToma(710, 300 - c1.wallHeight, 1.5, c1.wallHeight); 
-            if (isKeyTapped('ArrowUp')) { c1.wallHeight += 20; score += 10; } 
+            // FIXED: Allow A Button (Space) OR Up Arrow to climb
+            if (isKeyTapped('ArrowUp') || isKeyTapped('Space')) { c1.wallHeight += 20; score += 10; } 
             c1.wallHeight -= 0.6; if(c1.wallHeight < 0) c1.wallHeight = 0; 
             if (c1.wallHeight > 250) { score += 500; currentState = STATE.CH2_WIN; } 
         }
@@ -573,7 +592,10 @@
     // 3. FUGITIVE
     function playFugitive() {
         chapEl.innerText = "CH 3: FUGITIVE";
-        if(c12.bustedTimer > 0) { ctx.fillStyle = 'rgba(192, 57, 43, 1.0)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 40px Courier New'; ctx.fillText("CRASHED!", 400, 200); ctx.font = '20px Courier New'; ctx.fillText("Restarting section...", 400, 250); c12.bustedTimer--; if(c12.bustedTimer <= 0) { c12.distance = 0; c12.obstacles = []; } return; }
+        if(c12.bustedTimer > 0) { ctx.fillStyle = 'rgba(192, 57, 43, 1.0)'; ctx.fillRect(0,0,800,450); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 40px Courier New'; ctx.fillText("CRASHED!", 400, 200); ctx.font = '20px Courier New'; ctx.fillText("Restarting section...", 400, 250); c12.bustedTimer--; if(c12.bustedTimer <= 0) { 
+            c12.distance = 0; c12.obstacles = []; 
+            score = levelStartScore - 200; // SNAPSHOT RESET
+        } return; }
         const lanes = [250, 400, 550]; if (isKeyTapped('ArrowLeft') && c12.lane > 0) c12.lane--; if (isKeyTapped('ArrowRight') && c12.lane < 2) c12.lane++; ctx.fillStyle = '#555'; ctx.fillRect(200, 0, 400, 450); ctx.fillStyle = '#fff'; for(let i=0; i<450; i+=60) { let y = (i + c12.timer * 8) % 450; ctx.fillRect(325, y, 5, 30); ctx.fillRect(475, y, 5, 30); } let px = lanes[c12.lane]; ctx.fillStyle = '#3498db'; ctx.fillRect(px - 20, c12.carY, 40, 60); c12.timer++; if (c12.timer % 40 === 0) { let l = Math.floor(Math.random() * 3); let type = Math.random() > 0.3 ? 'cop' : 'phone'; c12.obstacles.push({ lane: l, y: -50, type: type }); } for (let i = c12.obstacles.length - 1; i >= 0; i--) { let o = c12.obstacles[i]; o.y += 8; let ox = lanes[o.lane]; if(o.type === 'cop') { ctx.fillStyle = '#2c3e50'; ctx.fillRect(ox - 20, o.y, 40, 60); ctx.fillStyle = (Date.now()%200<100) ? 'red' : 'blue'; ctx.fillRect(ox-10, o.y+10, 20, 10); } else { ctx.fillStyle = '#2ecc71'; ctx.fillRect(ox - 10, o.y, 20, 30); } if (o.y > 300 && o.y < 410 && c12.lane === o.lane) { if(o.type === 'cop') { c12.bustedTimer = 60; score -= 200; } else { score += 200; c12.obstacles.splice(i, 1); } } } c12.distance += 2; ctx.fillStyle = '#fff'; ctx.font = '20px Courier New'; ctx.fillText("KM: " + c12.distance, 50, 50); if (c12.distance > 2000) currentState = STATE.CH3_WIN;
     }
 
@@ -592,7 +614,7 @@
         
         let frame = moving ? Math.floor(Date.now()/50) : 0;
         drawToma(c15.x, c15.y, 1, frame); 
-        c15.eggLocs.forEach(e => { if(!e.taken && Math.abs(c15.x - e.x) < 20 && Math.abs(c15.y - e.y) < 20) { e.taken = true; c15.eggsCollected++; score += 500; }}); if (c15.cookState === 2 && moving) { currentQuote = getQuote(); c15.bustedTimer = 120; score -= 200; } if (c15.eggsCollected >= 5) { currentState = STATE.CH4_WIN; }
+        c15.eggLocs.forEach(e => { if(!e.taken && Math.abs(c15.x - e.x) < 20 && Math.abs(c15.y - e.y) < 20) { e.taken = true; c15.eggsCollected++; score += 500; }}); if (c15.cookState === 2 && moving) { currentQuote = getQuote(); c15.bustedTimer = 120; } if (c15.eggsCollected >= 5) { currentState = STATE.CH4_WIN; }
     }
 
     // 5. PARMA
@@ -611,14 +633,14 @@
 
         let safe = Math.abs(c2.guardX - 550) > 180; if (keys['Space']) { c2.isSawing = true; c2.sawProgress += 0.15; c2.noise += 0.9; score += 1; c2.pasteDelay = 60; ctx.fillStyle = 'yellow'; ctx.fillRect(655 + Math.random()*10, 220, 3, 3); } else { c2.isSawing = false; if(c2.pasteDelay > 0) { c2.pasteDelay--; c2.noise -= 0.05; } else { c2.noise -= 0.6; } }
         
-        if (c2.noise < 0) c2.noise = 0; if (c2.noise > 100) c2.noise = 100; if (!safe && c2.noise > 30) { currentQuote = getQuote(); c2.bustedTimer = 150; score -= 100; }
+        if (c2.noise < 0) c2.noise = 0; if (c2.noise > 100) c2.noise = 100; if (!safe && c2.noise > 30) { currentQuote = getQuote(); c2.bustedTimer = 150; }
         ctx.fillStyle = '#fff'; ctx.font = '16px Courier New'; ctx.textAlign = 'left'; 
         ctx.fillText("PROGRESS:", 20, 30);
         ctx.fillStyle = '#333'; ctx.fillRect(130, 15, 200, 15);
         ctx.fillStyle = '#2ecc71'; ctx.fillRect(130, 15, c2.sawProgress * 2, 15);
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(130, 15, 200, 15);
         
-        ctx.fillStyle = '#fff'; ctx.fillText("DANGER:", 20, 60); ctx.fillStyle = c2.noise > 50 ? 'red' : 'yellow'; ctx.fillRect(130, 45, c2.noise * 2, 15);
+        ctx.fillStyle = '#fff'; ctx.fillText("NOISE:", 20, 60); ctx.fillStyle = c2.noise > 50 ? 'red' : 'yellow'; ctx.fillRect(130, 45, c2.noise * 2, 15);
         if (c2.sawProgress >= 100) { score += 1000; currentState = STATE.CH5_WIN; }
     }
 
@@ -635,7 +657,9 @@
             ctx.fillText("Special Forces capture you.", 400, 250); 
             c3.crashTimer--; if(c3.crashTimer <= 0) currentState = STATE.CH6_JAIL; return; 
         }
-        c3.roadOffset = (c3.roadOffset + c3.speed) % 60; ctx.fillStyle = '#555'; ctx.fillRect(0, 0, 800, 450); ctx.fillStyle = '#fff'; for(let i= -60; i<860; i+=60) { ctx.fillRect(i - c3.roadOffset, 150, 40, 5); ctx.fillRect(i - c3.roadOffset, 300, 40, 5); } if (keys['ArrowUp']) c3.carY -= 5; if (keys['ArrowDown']) c3.carY += 5; c3.carY = Math.max(10, Math.min(410, c3.carY)); ctx.fillStyle = '#3498db'; ctx.fillRect(100, c3.carY, 60, 30); ctx.fillStyle = '#2980b9'; ctx.fillRect(115, c3.carY+2, 30, 26); if (Math.random() < 0.04) c3.obstacles.push({ x: 900, y: Math.random() * 400 }); for (let i=0; i<c3.obstacles.length; i++) { let obs = c3.obstacles[i]; obs.x -= (c3.speed + 4); ctx.fillStyle = '#2c3e50'; ctx.fillRect(obs.x, obs.y, 60, 30); ctx.fillStyle = (Date.now() % 200 < 100) ? 'red' : 'blue'; ctx.fillRect(obs.x+20, obs.y+10, 10, 10); if (100 < obs.x + 60 && 160 > obs.x && c3.carY < obs.y + 30 && c3.carY + 30 > obs.y) { c3.crashed = true; c3.crashTimer = 180; currentQuote = getQuote(); } } score += 1; c3.distance += 1; ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.font = '20px Courier New'; ctx.fillText("BORDER: " + (2000 - c3.distance), 20, 30); if (c3.distance > 2000) { score += 2000; currentState = STATE.CH6_HISTORY; }
+        c3.roadOffset = (c3.roadOffset + c3.speed) % 60; ctx.fillStyle = '#555'; ctx.fillRect(0, 0, 800, 450); ctx.fillStyle = '#fff'; for(let i= -60; i<860; i+=60) { ctx.fillRect(i - c3.roadOffset, 150, 40, 5); ctx.fillRect(i - c3.roadOffset, 300, 40, 5); } if (keys['ArrowUp']) c3.carY -= 5; if (keys['ArrowDown']) c3.carY += 5; c3.carY = Math.max(10, Math.min(410, c3.carY)); ctx.fillStyle = '#3498db'; ctx.fillRect(100, c3.carY, 60, 30); ctx.fillStyle = '#2980b9'; ctx.fillRect(115, c3.carY+2, 30, 26); if (Math.random() < 0.04) c3.obstacles.push({ x: 900, y: Math.random() * 400 }); for (let i=0; i<c3.obstacles.length; i++) { let obs = c3.obstacles[i]; obs.x -= (c3.speed + 4); ctx.fillStyle = '#2c3e50'; ctx.fillRect(obs.x, obs.y, 60, 30); ctx.fillStyle = (Date.now() % 200 < 100) ? 'red' : 'blue'; ctx.fillRect(obs.x+20, obs.y+10, 10, 10); if (100 < obs.x + 60 && 160 > obs.x && c3.carY < obs.y + 30 && c3.carY + 30 > obs.y) { c3.crashed = true; c3.crashTimer = 180; currentQuote = getQuote(); 
+            score = levelStartScore - 200; // SNAPSHOT RESET
+        } } score += 1; c3.distance += 1; ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.font = '20px Courier New'; ctx.fillText("BORDER: " + (2000 - c3.distance), 20, 30); if (c3.distance > 2000) { score += 2000; currentState = STATE.CH6_HISTORY; }
     }
 
     // 7. OPERA
@@ -670,7 +694,6 @@
         if (c4.descent > 3000) currentState = STATE.CH7_WIN;
     }
 
-    // No extra loop() call here! It's in window.onload.
 </script>
 </body>
 </html>
