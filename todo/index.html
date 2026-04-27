@@ -1,0 +1,1936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TODO</title>
+<style>
+  :root {
+    --bg: #fafaf8;
+    --surface: #ffffff;
+    --border: #e8e6e1;
+    --text: #2a2a28;
+    --muted: #8a8780;
+    --faint: #c0bdb5;
+    --accent: #4a4a48;
+    --hi: #d97757;
+    --vhi: #c2410c;
+    --age-warn: #b45309;
+    --age-stale: #b91c1c;
+    --done-bg: #f4f3ef;
+    --hover: #f6f5f1;
+    --drop: #fff7ed;
+    --drop-border: #d97757;
+    --focus: #d97757;
+    --check-bg: #ffffff;
+    --check-tick: #ffffff;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --surface: #232321;
+      --border: #3a3935;
+      --text: #ebe8df;
+      --muted: #8a8780;
+      --faint: #5a5854;
+      --accent: #c0bdb5;
+      --hi: #f59e6e;
+      --vhi: #fb7c3c;
+      --age-warn: #fbbf24;
+      --age-stale: #f87171;
+      --done-bg: #232321;
+      --hover: #2a2926;
+      --drop: #3a2415;
+      --drop-border: #d97757;
+      --focus: #f59e6e;
+      --check-bg: #1a1a18;
+      --check-tick: #1a1a18;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .app {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 28px 80px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .status {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .status button {
+    font: inherit;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .status button:hover { background: var(--hover); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); display: inline-block; }
+  .dot.ok { background: #4ade80; }
+  .dot.warn { background: #fbbf24; }
+  .dot.err { background: #ef4444; }
+  .multi-tab {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    color: var(--age-warn);
+  }
+  .multi-tab.show { display: inline-flex; }
+
+  .help-toggle {
+    font: inherit;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .help-toggle:hover { background: var(--hover); }
+
+  .help-panel {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .help-panel.show { display: block; }
+  .help-panel h3 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text);
+  }
+  .help-panel kbd {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--hover);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    color: var(--text);
+  }
+  .help-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 14px;
+    align-items: center;
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .col {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 14px 10px;
+    min-height: 180px;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .col.drop-target {
+    background: var(--drop);
+    border-color: var(--drop-border);
+  }
+  .col h2 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 4px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .col h2 .count {
+    color: var(--faint);
+    font-weight: 500;
+  }
+
+  .input-row {
+    display: flex;
+    margin-bottom: 8px;
+  }
+  .input-row input {
+    flex: 1;
+    font: inherit;
+    color: var(--text);
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 8px 10px;
+    border-radius: 6px;
+  }
+  .input-row input::placeholder { color: var(--muted); }
+  .input-row input:focus { background: var(--hover); }
+
+  ul.list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    min-height: 40px;
+  }
+
+  li.item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: grab;
+    user-select: none;
+    transition: background 120ms ease, box-shadow 120ms ease;
+    outline: none;
+  }
+  li.item:hover { background: var(--hover); }
+  li.item:focus-visible {
+    background: var(--hover);
+    box-shadow: inset 0 0 0 1.5px var(--focus);
+  }
+  li.item:active { cursor: grabbing; }
+  li.item.dragging { opacity: 0.4; }
+
+  .check {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--faint);
+    border-radius: 4px;
+    background: var(--check-bg);
+    cursor: pointer;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .check:hover { border-color: var(--accent); }
+  .check:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .check:checked::after {
+    content: "";
+    width: 4px;
+    height: 8px;
+    border: solid var(--check-tick);
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+
+  .badge {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    width: 22px;
+    text-align: center;
+    cursor: pointer;
+    padding: 2px 0;
+    border-radius: 4px;
+    color: var(--muted);
+    flex-shrink: 0;
+    transition: background 120ms ease;
+  }
+  .badge:hover { background: var(--hover); }
+  .badge.p1 { color: var(--hi); }
+  .badge.p2 { color: var(--vhi); }
+  .badge.p0::before { content: "·"; color: var(--faint); }
+  .badge.p1::before { content: "!"; }
+  .badge.p2::before { content: "!!"; }
+
+  .text {
+    flex: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+    cursor: text;
+    word-break: break-word;
+    min-width: 0;
+  }
+  .text:focus {
+    outline: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .age {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: var(--faint);
+    flex-shrink: 0;
+    padding: 0 4px;
+    cursor: help;
+  }
+  .age.warn { color: var(--age-warn); }
+  .age.stale { color: var(--age-stale); font-weight: 600; }
+
+  .delete {
+    font: inherit;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+    flex-shrink: 0;
+  }
+  li.item:hover .delete,
+  li.item:focus-visible .delete { opacity: 1; }
+  .delete:hover { color: var(--vhi); background: var(--hover); }
+
+  .done-section {
+    margin-top: 28px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+  .done-toggle {
+    font: inherit;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+  .done-toggle .arrow {
+    display: inline-block;
+    transition: transform 120ms ease;
+  }
+  .done-toggle.open .arrow { transform: rotate(90deg); }
+  .done-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: none;
+  }
+  .done-list.open { display: block; }
+  .done-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    color: var(--muted);
+    border-radius: 6px;
+  }
+  .done-list li:hover { background: var(--hover); }
+  .done-list .text {
+    text-decoration: line-through;
+    cursor: default;
+  }
+  .done-list .delete-perm {
+    font: inherit;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .done-list li:hover .delete-perm { opacity: 1; }
+  .done-list .delete-perm:hover { color: var(--vhi); background: var(--hover); }
+  .done-list .source {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--faint);
+    margin-left: auto;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--text);
+    color: var(--bg);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.16);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 160ms ease;
+    z-index: 100;
+  }
+  .toast.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast button {
+    font: inherit;
+    color: var(--bg);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+  }
+
+  @media (max-width: 720px) {
+    .columns { grid-template-columns: 1fr; }
+    .app { padding: 16px 14px 60px; }
+    .delete { opacity: 1; }
+  }
+
+  /* ===== Settings modal ===== */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 200;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px 18px;
+    max-width: 520px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.16);
+  }
+  .modal h3 {
+    margin: 0 0 16px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .mode-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mode-tab {
+    font: inherit;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 14px;
+    margin-bottom: -1px;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .mode-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--hi);
+  }
+  .mode-content { display: none; }
+  .mode-content.active { display: block; }
+  .mode-content p {
+    color: var(--muted);
+    margin: 0 0 14px;
+    font-size: 13px;
+  }
+  .mode-content label {
+    display: block;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .mode-content label input {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+  }
+  .token-row { position: relative; }
+  .token-row input { padding-right: 42px; }
+  .token-row .eye {
+    position: absolute;
+    right: 6px;
+    top: 28px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+    justify-content: flex-end;
+  }
+  .modal-actions button {
+    font: inherit;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .modal-actions button:hover { background: var(--hover); }
+  .modal-actions button.primary {
+    background: var(--hi);
+    color: #fff;
+    border-color: var(--hi);
+  }
+  .modal-actions button.primary:hover { background: var(--vhi); }
+  .modal-actions button.danger { color: var(--vhi); }
+  .modal-actions .spacer { flex: 1; }
+  .gh-status {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--hover);
+    font-size: 12px;
+    color: var(--muted);
+    display: none;
+  }
+  .gh-status.show { display: block; }
+  .gh-status.ok { color: #16a34a; }
+  .gh-status.err { color: var(--vhi); }
+  .help-link {
+    color: var(--hi);
+    text-decoration: none;
+  }
+  .help-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>TODO</h1>
+    <div class="status">
+      <span class="dot" id="syncDot"></span>
+      <span id="syncLabel">Not connected</span>
+      <span class="multi-tab" id="multiTab">⚠ Other tab open</span>
+      <button id="settingsBtn">Settings</button>
+      <button class="help-toggle" id="helpToggle">?</button>
+    </div>
+  </header>
+
+  <div class="help-panel" id="helpPanel">
+    <h3>Keyboard shortcuts</h3>
+    <div class="help-grid">
+      <div><kbd>↑</kbd> <kbd>↓</kbd></div><div>Navigate items in current column</div>
+      <div><kbd>←</kbd> <kbd>→</kbd></div><div>Move focus to the other column</div>
+      <div><kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd></div><div>Move focused item to the other column</div>
+      <div><kbd>0</kbd> <kbd>1</kbd> <kbd>2</kbd></div><div>Set priority (none / ! / !!)</div>
+      <div><kbd>Space</kbd></div><div>Toggle done</div>
+      <div><kbd>Delete</kbd> / <kbd>Backspace</kbd></div><div>Delete (5s undo)</div>
+      <div><kbd>Enter</kbd></div><div>Rename focused item (then <kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel)</div>
+      <div><kbd>Cmd</kbd>+<kbd>Z</kbd></div><div>Undo last delete (while toast is visible)</div>
+      <div><kbd>n</kbd></div><div>Jump to "Add a task" input of the current column</div>
+      <div><kbd>Esc</kbd></div><div>Leave the add input and return to the list</div>
+    </div>
+  </div>
+
+  <div class="columns">
+    <section class="col" data-list="active">
+      <h2>Active <span class="count" data-count="active">0</span></h2>
+      <div class="input-row">
+        <input type="text" placeholder="Add a task…" data-input="active" autocomplete="off">
+      </div>
+      <ul class="list" data-list="active"></ul>
+    </section>
+
+    <section class="col" data-list="tracking">
+      <h2>Tracking <span class="count" data-count="tracking">0</span></h2>
+      <div class="input-row">
+        <input type="text" placeholder="Waiting on…" data-input="tracking" autocomplete="off">
+      </div>
+      <ul class="list" data-list="tracking"></ul>
+    </section>
+  </div>
+
+  <div class="done-section">
+    <button class="done-toggle" id="doneToggle">
+      <span class="arrow">▸</span>
+      <span>Done (<span id="doneCount">0</span>)</span>
+    </button>
+    <ul class="done-list" id="doneList"></ul>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="settingsBackdrop">
+  <div class="modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <h3 id="settingsTitle">Storage</h3>
+
+    <div class="mode-tabs" role="tablist">
+      <button class="mode-tab" data-mode-tab="local" role="tab">Local folder</button>
+      <button class="mode-tab" data-mode-tab="github" role="tab">GitHub (works on mobile)</button>
+    </div>
+
+    <div class="mode-content" data-mode-content="local">
+      <p>Saves <code>active.json</code> and <code>tracking.json</code> to a folder you pick. Only works on Chrome/Edge desktop. Files stay on this device + whatever syncs the folder (Drive, Dropbox).</p>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="localDisconnectBtn" class="danger">Disconnect</button>
+        <button id="localConnectBtn" class="primary">Connect folder</button>
+      </div>
+    </div>
+
+    <div class="mode-content" data-mode-content="github">
+      <p>Saves to a private GitHub repo via the Contents API. Works on any browser, including mobile. Token is stored in this browser only and only sent to api.github.com.</p>
+      <label>Owner
+        <input type="text" id="ghOwner" placeholder="tigellus" autocomplete="off" spellcheck="false">
+      </label>
+      <label>Data repo (must be private)
+        <input type="text" id="ghRepo" placeholder="todo-data" autocomplete="off" spellcheck="false">
+      </label>
+      <label>Branch
+        <input type="text" id="ghBranch" placeholder="main" value="main" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="token-row">Token (fine-grained PAT, scoped to this repo, Contents: read &amp; write)
+        <input type="password" id="ghToken" placeholder="github_pat_..." autocomplete="off" spellcheck="false">
+        <button class="eye" id="ghTokenEye" type="button" title="Show/hide">eye</button>
+      </label>
+      <p>Create a token: <a class="help-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">github.com/settings/personal-access-tokens/new</a></p>
+      <div class="gh-status" id="ghStatus"></div>
+      <div class="modal-actions">
+        <button id="ghDisconnectBtn" class="danger">Disconnect</button>
+        <span class="spacer"></span>
+        <button id="ghTestBtn">Test</button>
+        <button id="ghSaveBtn" class="primary">Save &amp; connect</button>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <span class="spacer"></span>
+      <button id="settingsClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <span id="toastMsg"></span>
+  <button id="toastUndo">Undo</button>
+</div>
+
+<script>
+'use strict';
+
+// ===== Data model =====
+// Each item: { id, text, priority (0|1|2), done, createdAt, enteredListAt, doneAt }
+// enteredListAt resets when an item is moved between columns — used for "waiting since".
+const STATE = {
+  active: [],
+  tracking: [],
+};
+
+const STORAGE_KEY = 'todo-app-fallback-v1';
+const IDB_NAME = 'todo-app';
+const IDB_STORE = 'handles';
+const IDB_KEY = 'dirHandle';
+const TAB_ID = Math.random().toString(36).slice(2);
+
+let dirHandle = null;
+let sortTimers = {};
+let pendingDelete = null;
+let focusedItemId = null;
+let saveQueued = false;
+let knownMtimes = { 'active.json': 0, 'tracking.json': 0 };
+let suppressNextPoll = false;
+let lastSyncedAt = null;
+
+// ===== Storage mode =====
+// 'none' = localStorage only · 'local' = file system · 'github' = GitHub Contents API
+let mode = 'none';
+const CONFIG_KEY = 'todo-app-config-v2';
+let appConfig = { mode: 'none', github: null };
+
+// GitHub state
+let ghShas = { 'active.json': null, 'tracking.json': null };
+let ghKnownBranchSha = null;
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') appConfig = parsed;
+    }
+  } catch {}
+  if (!appConfig.mode) appConfig.mode = 'none';
+  mode = appConfig.mode;
+}
+function saveConfig() {
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig)); } catch {}
+}
+
+// ===== UUID =====
+function uid() {
+  return 'i_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+// ===== Migration =====
+function migrateItems(items) {
+  return items.map(i => ({
+    enteredListAt: i.enteredListAt ?? i.createdAt ?? Date.now(),
+    ...i,
+    enteredListAt: i.enteredListAt ?? i.createdAt ?? Date.now(),
+  }));
+}
+
+// ===== IndexedDB =====
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbPut(key, val) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ===== Persistence =====
+function setSyncStatus(state, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'dot ' + (state || '');
+  lbl.textContent = label;
+}
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+function relTime(ms) {
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 5) return 'just now';
+  if (s < 60) return s + 's ago';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const d = Math.floor(h / 24);
+  return d + 'd ago';
+}
+function formatSyncedTime(ms) {
+  const d = new Date(ms);
+  const time = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  const today = new Date();
+  const sameDay = d.getFullYear() === today.getFullYear()
+    && d.getMonth() === today.getMonth()
+    && d.getDate() === today.getDate();
+  if (sameDay) return time;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return time + ' ' + d.getDate() + ' ' + months[d.getMonth()];
+}
+function refreshSyncedLabel() {
+  if (!lastSyncedAt) return;
+  const lbl = document.getElementById('syncLabel');
+  let suffix = '';
+  if (mode === 'github' && ghEnabled()) {
+    const c = ghCfg();
+    suffix = `${c.owner}/${c.repo}`;
+  } else if (mode === 'local' && dirHandle) {
+    suffix = dirHandle.name;
+  } else {
+    return;
+  }
+  lbl.textContent = `Synced ${formatSyncedTime(lastSyncedAt)} (${relTime(lastSyncedAt)}) · ${suffix}`;
+  lbl.title = new Date(lastSyncedAt).toLocaleString();
+}
+// Tick the relative time every 15s so "30s ago" updates without effort
+setInterval(refreshSyncedLabel, 15000);
+
+async function ensurePermission(handle, mode = 'readwrite') {
+  if (!handle) return false;
+  const opts = { mode };
+  if ((await handle.queryPermission(opts)) === 'granted') return true;
+  if ((await handle.requestPermission(opts)) === 'granted') return true;
+  return false;
+}
+
+async function pickFolder() {
+  if (!('showDirectoryPicker' in window)) {
+    alert('Your browser does not support the File System Access API. Use Chrome or Edge for folder sync. Data will save to localStorage instead.');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    dirHandle = handle;
+    await idbPut(IDB_KEY, handle);
+    setSyncStatus('ok', `Synced: ${handle.name}`);
+    const loaded = await loadFromFolder();
+    if (loaded) {
+      render();
+    } else {
+      await saveAll();
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    console.error(err);
+    setSyncStatus('err', 'Folder error');
+  }
+}
+
+async function tryRestoreFolder() {
+  try {
+    const stored = await idbGet(IDB_KEY);
+    if (!stored) {
+      setSyncStatus('warn', 'Local only — connect folder');
+      return false;
+    }
+    dirHandle = stored;
+    const ok = await ensurePermission(dirHandle, 'readwrite');
+    if (!ok) {
+      setSyncStatus('warn', `Click "Connect folder" to re-grant access`);
+      return false;
+    }
+    setSyncStatus('ok', `Synced: ${dirHandle.name}`);
+    await loadFromFolder();
+    render();
+    return true;
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('err', 'Folder error');
+    return false;
+  }
+}
+
+async function readJsonFile(name) {
+  try {
+    const fileHandle = await dirHandle.getFileHandle(name);
+    const file = await fileHandle.getFile();
+    knownMtimes[name] = file.lastModified;
+    const text = await file.text();
+    if (!text.trim()) return null;
+    return JSON.parse(text);
+  } catch (err) {
+    if (err.name === 'NotFoundError') return null;
+    throw err;
+  }
+}
+
+async function writeJsonFile(name, data) {
+  const fileHandle = await dirHandle.getFileHandle(name, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(JSON.stringify(data, null, 2));
+  await writable.close();
+  // Refresh known mtime so the poller doesn't see our own write as external.
+  try {
+    const file = await fileHandle.getFile();
+    knownMtimes[name] = file.lastModified;
+  } catch {}
+}
+
+async function loadFromFolder() {
+  let foundAny = false;
+  try {
+    const a = await readJsonFile('active.json');
+    const t = await readJsonFile('tracking.json');
+    if (a && Array.isArray(a.items)) { STATE.active = migrateItems(a.items); foundAny = true; }
+    if (t && Array.isArray(t.items)) { STATE.tracking = migrateItems(t.items); foundAny = true; }
+    // Reflect on-disk freshness in the header
+    lastSyncedAt = Math.max(knownMtimes['active.json'] || 0, knownMtimes['tracking.json'] || 0) || Date.now();
+    refreshSyncedLabel();
+    return foundAny;
+  } catch (err) {
+    console.error('Load error', err);
+    setSyncStatus('err', 'Load error');
+    return false;
+  }
+}
+
+function saveLocal() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+  } catch (err) { console.warn('localStorage save failed', err); }
+}
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed.active) STATE.active = migrateItems(parsed.active);
+    if (parsed.tracking) STATE.tracking = migrateItems(parsed.tracking);
+  } catch (err) { console.warn('localStorage load failed', err); }
+}
+
+async function saveAll() {
+  saveLocal();
+  if (saveQueued) return;
+  saveQueued = true;
+
+  if (mode === 'github') {
+    // 1.5s debounce so rapid edits coalesce into one commit pair
+    await new Promise(r => setTimeout(r, 1500));
+    saveQueued = false;
+    if (!ghEnabled()) return;
+    try {
+      setSyncStatus('warn', 'Saving…');
+      await ghSaveAll();
+      lastSyncedAt = Date.now();
+      setSyncStatus('ok', '');
+      refreshSyncedLabel();
+      broadcast({ type: 'saved', from: TAB_ID });
+    } catch (err) {
+      console.error('GH save error', err);
+      setSyncStatus('err', 'GitHub save failed: ' + (err.message || ''));
+    }
+    return;
+  }
+
+  if (mode === 'local') {
+    if (!dirHandle) { saveQueued = false; return; }
+    await new Promise(r => setTimeout(r, 80));
+    saveQueued = false;
+    try {
+      suppressNextPoll = true;
+      await writeJsonFile('active.json', { items: STATE.active });
+      await writeJsonFile('tracking.json', { items: STATE.tracking });
+      lastSyncedAt = Date.now();
+      setSyncStatus('ok', '');
+      refreshSyncedLabel();
+      broadcast({ type: 'saved', from: TAB_ID });
+    } catch (err) {
+      console.error('Save error', err);
+      setSyncStatus('err', 'Save failed');
+    }
+    return;
+  }
+
+  saveQueued = false; // 'none' mode — only localStorage
+}
+
+// ===== External-change polling =====
+async function pollFiles() {
+  if (!dirHandle || document.hidden || saveQueued) return;
+  if (suppressNextPoll) { suppressNextPoll = false; return; }
+  try {
+    const aHandle = await dirHandle.getFileHandle('active.json');
+    const tHandle = await dirHandle.getFileHandle('tracking.json');
+    const aFile = await aHandle.getFile();
+    const tFile = await tHandle.getFile();
+    const aChanged = aFile.lastModified > knownMtimes['active.json'] + 100;
+    const tChanged = tFile.lastModified > knownMtimes['tracking.json'] + 100;
+    if (aChanged || tChanged) {
+      await loadFromFolder();
+      render();
+      flashStatus(`Reloaded — file changed externally`);
+    }
+  } catch {}
+}
+let _statusFlashTimer = null;
+function flashStatus(msg) {
+  const lbl = document.getElementById('syncLabel');
+  const prev = lbl.textContent;
+  lbl.textContent = msg;
+  if (_statusFlashTimer) clearTimeout(_statusFlashTimer);
+  _statusFlashTimer = setTimeout(() => {
+    if (lastSyncedAt && (mode === 'local' || mode === 'github')) {
+      refreshSyncedLabel();
+    } else {
+      lbl.textContent = prev;
+    }
+  }, 1800);
+}
+// Local file polling is cheap (mtime check) — every 3s
+setInterval(() => { if (mode === 'local') pollFiles(); }, 3000);
+// GitHub polling costs an API call — every 30s is fine
+setInterval(() => { if (mode === 'github') ghPoll(); }, 30000);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (mode === 'local') pollFiles();
+  else if (mode === 'github') ghPoll();
+});
+
+// ===== BroadcastChannel multi-tab =====
+let channel = null;
+let lastOtherTabSeen = 0;
+try {
+  channel = new BroadcastChannel('todo-app-v1');
+  channel.addEventListener('message', (e) => {
+    const msg = e.data || {};
+    if (msg.from === TAB_ID) return;
+    // Any message from another tab counts as a sign-of-life
+    lastOtherTabSeen = Date.now();
+    showMultiTab(true);
+    if (msg.type === 'hello' || msg.type === 'ping') {
+      channel.postMessage({ type: 'pong', from: TAB_ID });
+    } else if (msg.type === 'saved') {
+      if (dirHandle) loadFromFolder().then(() => render());
+    }
+  });
+  channel.postMessage({ type: 'hello', from: TAB_ID });
+  // Heartbeat: ping every 2s, clear indicator if nothing heard in 5s
+  setInterval(() => {
+    try { channel.postMessage({ type: 'ping', from: TAB_ID }); } catch {}
+    if (lastOtherTabSeen && Date.now() - lastOtherTabSeen > 5000) {
+      showMultiTab(false);
+      lastOtherTabSeen = 0;
+    }
+  }, 2000);
+  window.addEventListener('beforeunload', () => {
+    try { channel.postMessage({ type: 'bye', from: TAB_ID }); } catch {}
+  });
+} catch {}
+function broadcast(msg) {
+  if (channel) { try { channel.postMessage(msg); } catch {} }
+}
+function showMultiTab(on) {
+  document.getElementById('multiTab').classList.toggle('show', on);
+}
+
+// ===== GitHub backend =====
+const GH_API = 'https://api.github.com';
+
+function ghCfg() { return appConfig.github || {}; }
+function ghEnabled() {
+  const c = ghCfg();
+  return !!(c.owner && c.repo && c.token);
+}
+function ghHeaders() {
+  return {
+    'Authorization': 'Bearer ' + ghCfg().token,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+}
+function utf8ToBase64(str) {
+  // Robust for non-ASCII (turkish, accents, emoji)
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function base64ToUtf8(b64) {
+  const bin = atob(b64.replace(/\n/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function ghContentsUrl(path) {
+  const c = ghCfg();
+  const branch = c.branch || 'main';
+  return `${GH_API}/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`;
+}
+async function ghBranchRefUrl() {
+  const c = ghCfg();
+  const branch = c.branch || 'main';
+  return `${GH_API}/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/commits/${encodeURIComponent(branch)}`;
+}
+
+async function ghReadFile(path) {
+  const url = await ghContentsUrl(path);
+  const res = await fetch(url, { headers: ghHeaders() });
+  if (res.status === 404) { ghShas[path] = null; return null; }
+  if (!res.ok) throw new Error(`Read ${path}: HTTP ${res.status}`);
+  const data = await res.json();
+  ghShas[path] = data.sha;
+  if (data.content) {
+    try { return JSON.parse(base64ToUtf8(data.content)); }
+    catch (e) { console.error('Parse error', e); return null; }
+  }
+  return null;
+}
+
+async function ghWriteFile(path, data, message) {
+  const c = ghCfg();
+  const branch = c.branch || 'main';
+  const url = `${GH_API}/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}`;
+  const body = {
+    message: message || `Update ${path}`,
+    content: utf8ToBase64(JSON.stringify(data, null, 2) + '\n'),
+    branch,
+  };
+  if (ghShas[path]) body.sha = ghShas[path];
+
+  let res = await fetch(url, {
+    method: 'PUT',
+    headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  // Conflict — refresh sha and retry once
+  if (res.status === 409 || res.status === 422) {
+    await ghReadFile(path);
+    body.sha = ghShas[path];
+    res = await fetch(url, {
+      method: 'PUT',
+      headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Write ${path}: HTTP ${res.status} ${text.slice(0, 120)}`);
+  }
+  const r = await res.json();
+  if (r && r.content && r.content.sha) ghShas[path] = r.content.sha;
+}
+
+async function ghGetBranchSha() {
+  const url = await ghBranchRefUrl();
+  const res = await fetch(url, { headers: ghHeaders() });
+  if (!res.ok) throw new Error(`Branch sha: HTTP ${res.status}`);
+  const data = await res.json();
+  return data.sha;
+}
+
+async function ghLoadAll() {
+  let foundAny = false;
+  const a = await ghReadFile('active.json');
+  const t = await ghReadFile('tracking.json');
+  if (a && Array.isArray(a.items)) { STATE.active = migrateItems(a.items); foundAny = true; }
+  if (t && Array.isArray(t.items)) { STATE.tracking = migrateItems(t.items); foundAny = true; }
+  try { ghKnownBranchSha = await ghGetBranchSha(); } catch {}
+  return foundAny;
+}
+
+async function ghSaveAll() {
+  // Sequential PUTs (each is one commit). Two API calls per save batch.
+  const ts = new Date().toISOString();
+  await ghWriteFile('active.json', { items: STATE.active }, `Update active.json · ${ts}`);
+  await ghWriteFile('tracking.json', { items: STATE.tracking }, `Update tracking.json · ${ts}`);
+  try { ghKnownBranchSha = await ghGetBranchSha(); } catch {}
+}
+
+async function ghTestConnection() {
+  // Issue a single low-cost GET on the repo metadata endpoint
+  const c = ghCfg();
+  const url = `${GH_API}/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}`;
+  const res = await fetch(url, { headers: ghHeaders() });
+  if (res.status === 401) throw new Error('Token rejected (401). Check the token.');
+  if (res.status === 404) throw new Error('Repo not found (404). Check owner/repo, ensure token has access.');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if (!data.private) throw new Error('Repo exists but is PUBLIC. Use a private repo for personal data.');
+  return data;
+}
+
+async function ghPoll() {
+  if (mode !== 'github' || document.hidden || saveQueued || !ghEnabled()) return;
+  try {
+    const sha = await ghGetBranchSha();
+    if (sha && sha !== ghKnownBranchSha) {
+      ghKnownBranchSha = sha;
+      // Avoid clobbering an in-flight rename; load and re-render
+      await ghLoadAll();
+      lastSyncedAt = Date.now();
+      render();
+      flashStatus('Reloaded — remote change');
+      refreshSyncedLabel();
+    }
+  } catch (err) {
+    console.warn('GH poll error', err);
+  }
+}
+
+// ===== Sorting =====
+function activeItemsSorted(list) {
+  return STATE[list]
+    .filter(i => !i.done)
+    .slice()
+    .sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return a.createdAt - b.createdAt;
+    });
+}
+
+// ===== FLIP animation =====
+function snapshotPositions(ul) {
+  const map = new Map();
+  for (const li of ul.children) {
+    const id = li.dataset.id;
+    if (!id) continue;
+    map.set(id, li.getBoundingClientRect());
+  }
+  return map;
+}
+function playFlip(ul, before) {
+  for (const li of ul.children) {
+    const id = li.dataset.id;
+    const prev = before.get(id);
+    if (!prev) continue;
+    const now = li.getBoundingClientRect();
+    const dy = prev.top - now.top;
+    if (Math.abs(dy) < 1) continue;
+    li.animate(
+      [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+      { duration: 280, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+    );
+  }
+}
+
+// ===== Age formatting =====
+function ageDays(ms) {
+  return Math.floor((Date.now() - ms) / 86400000);
+}
+function ageString(ms) {
+  const d = ageDays(ms);
+  if (d < 1) return 'today';
+  if (d < 14) return d + 'd';
+  const w = Math.floor(d / 7);
+  if (w < 9) return w + 'w';
+  const mo = Math.floor(d / 30);
+  return mo + 'mo';
+}
+function ageClass(ms) {
+  const d = ageDays(ms);
+  if (d >= 14) return 'stale';
+  if (d >= 5) return 'warn';
+  return '';
+}
+function formatDate(ms) {
+  return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// ===== Rendering =====
+function render() {
+  renderList('active');
+  renderList('tracking');
+  renderDone();
+  updateCounts();
+}
+
+function updateCounts() {
+  document.querySelector('[data-count="active"]').textContent =
+    `(${STATE.active.filter(i => !i.done).length})`;
+  document.querySelector('[data-count="tracking"]').textContent =
+    `(${STATE.tracking.filter(i => !i.done).length})`;
+}
+
+function renderList(list) {
+  const ul = document.querySelector(`ul.list[data-list="${list}"]`);
+  const before = snapshotPositions(ul);
+  // Capture BEFORE wiping the list whether a list item was actually focused.
+  // If the user is in the add-task input or anywhere else, don't steal focus.
+  const ae = document.activeElement;
+  const wasItemFocused = !!(ae && ae.closest && ae.closest('ul.list[data-list]'));
+  ul.innerHTML = '';
+  const items = activeItemsSorted(list);
+  for (const item of items) ul.appendChild(makeItemEl(item, list));
+  requestAnimationFrame(() => playFlip(ul, before));
+  if (wasItemFocused && focusedItemId) {
+    const li = ul.querySelector(`li.item[data-id="${focusedItemId}"]`);
+    if (li) li.focus({ preventScroll: true });
+  }
+}
+
+function renderDone() {
+  const list = document.getElementById('doneList');
+  list.innerHTML = '';
+  const all = [
+    ...STATE.active.filter(i => i.done).map(i => ({ item: i, source: 'active' })),
+    ...STATE.tracking.filter(i => i.done).map(i => ({ item: i, source: 'tracking' })),
+  ];
+  all.sort((a, b) => (b.item.doneAt || 0) - (a.item.doneAt || 0));
+
+  for (const { item, source } of all) {
+    const li = document.createElement('li');
+    li.dataset.id = item.id;
+    li.dataset.source = source;
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'check';
+    cb.checked = true;
+    cb.title = 'Restore';
+    cb.addEventListener('change', () => toggleDone(item.id, source, false));
+
+    const text = document.createElement('span');
+    text.className = 'text';
+    text.textContent = item.text;
+
+    const src = document.createElement('span');
+    src.className = 'source';
+    src.textContent = source === 'active' ? '↶ active' : '↶ tracking';
+
+    const del = document.createElement('button');
+    del.className = 'delete-perm';
+    del.title = 'Delete permanently';
+    del.textContent = '×';
+    del.addEventListener('click', () => deletePermanently(item.id, source));
+
+    li.append(cb, text, src, del);
+    list.appendChild(li);
+  }
+  document.getElementById('doneCount').textContent = all.length;
+}
+
+function makeItemEl(item, list) {
+  const li = document.createElement('li');
+  li.className = 'item';
+  li.dataset.id = item.id;
+  li.dataset.list = list;
+  li.draggable = true;
+  li.tabIndex = 0;
+
+  // Tooltip with creation date and (for tracking) waiting-since
+  if (list === 'tracking') {
+    li.title = `Waiting since ${formatDate(item.enteredListAt)} · created ${formatDate(item.createdAt)}`;
+  } else {
+    li.title = `Created ${formatDate(item.createdAt)}`;
+  }
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'check';
+  cb.checked = false;
+  cb.addEventListener('change', () => toggleDone(item.id, list, true));
+  cb.addEventListener('mousedown', (e) => e.stopPropagation());
+
+  const badge = document.createElement('span');
+  badge.className = 'badge p' + item.priority;
+  badge.title = 'Click to change priority (or press 0 / 1 / 2)';
+  badge.addEventListener('click', (e) => {
+    e.stopPropagation();
+    cyclePriority(item.id, list);
+  });
+
+  const text = document.createElement('span');
+  text.className = 'text';
+  text.textContent = item.text;
+  text.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startEdit(text, item, list);
+  });
+  text.addEventListener('mousedown', (e) => e.stopPropagation());
+
+  li.append(cb, badge, text);
+
+  // Age badge — visible only on tracking (where waiting-time matters)
+  if (list === 'tracking') {
+    const age = document.createElement('span');
+    const cls = ageClass(item.enteredListAt);
+    age.className = 'age' + (cls ? ' ' + cls : '');
+    age.textContent = ageString(item.enteredListAt);
+    li.appendChild(age);
+  }
+
+  const del = document.createElement('button');
+  del.className = 'delete';
+  del.title = 'Delete';
+  del.textContent = '×';
+  del.addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteItem(item.id, list);
+  });
+  li.appendChild(del);
+
+  // Drag
+  li.addEventListener('dragstart', (e) => {
+    li.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', JSON.stringify({ id: item.id, from: list }));
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  li.addEventListener('dragend', () => li.classList.remove('dragging'));
+
+  // Focus tracking
+  li.addEventListener('focus', () => { focusedItemId = item.id; });
+
+  return li;
+}
+
+function startEdit(textEl, item, list) {
+  // Guard against double-init if user clicks the text again while editing
+  if (textEl.dataset.editing === '1') return;
+  textEl.dataset.editing = '1';
+  textEl.contentEditable = 'plaintext-only';
+  textEl.focus();
+  const range = document.createRange();
+  range.selectNodeContents(textEl);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  let done = false;
+  const finish = (cancel) => {
+    if (done) return;
+    done = true;
+    textEl.dataset.editing = '0';
+    textEl.contentEditable = 'false';
+    textEl.removeEventListener('blur', onBlur);
+    textEl.removeEventListener('keydown', onKey);
+    const li = textEl.closest('li.item');
+    if (cancel) {
+      textEl.textContent = item.text;
+    } else {
+      const newText = textEl.textContent.trim();
+      if (newText && newText !== item.text) {
+        item.text = newText;
+        saveAll();
+      } else {
+        textEl.textContent = item.text;
+      }
+    }
+    if (li) li.focus({ preventScroll: true });
+  };
+  const onKey = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      finish(false);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      finish(true);
+    }
+  };
+  const onBlur = () => finish(false);
+  textEl.addEventListener('keydown', onKey);
+  textEl.addEventListener('blur', onBlur);
+}
+
+// ===== Mutations =====
+function findItem(list, id) { return STATE[list].find(i => i.id === id); }
+function findIndex(list, id) { return STATE[list].findIndex(i => i.id === id); }
+
+function addItem(list, text) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const now = Date.now();
+  STATE[list].push({
+    id: uid(),
+    text: trimmed,
+    priority: 0,
+    done: false,
+    createdAt: now,
+    enteredListAt: now,
+    doneAt: null,
+  });
+  renderList(list);
+  updateCounts();
+  saveAll();
+}
+
+function setPriority(id, list, priority) {
+  const item = findItem(list, id);
+  if (!item) return;
+  if (item.priority === priority) return;
+  item.priority = priority;
+  const li = document.querySelector(`li.item[data-id="${id}"]`);
+  if (li) {
+    const badge = li.querySelector('.badge');
+    badge.className = 'badge p' + item.priority;
+  }
+  saveAll();
+  if (sortTimers[list]) clearTimeout(sortTimers[list]);
+  sortTimers[list] = setTimeout(() => {
+    renderList(list);
+    sortTimers[list] = null;
+  }, 1000);
+}
+
+function cyclePriority(id, list) {
+  const item = findItem(list, id);
+  if (!item) return;
+  setPriority(id, list, (item.priority + 1) % 3);
+}
+
+function toggleDone(id, list, markDone) {
+  const item = findItem(list, id);
+  if (!item) return;
+  item.done = !!markDone;
+  item.doneAt = markDone ? Date.now() : null;
+  if (focusedItemId === id) focusedItemId = null;
+  renderList(list);
+  renderDone();
+  updateCounts();
+  saveAll();
+}
+
+function deleteItem(id, list) {
+  const idx = findIndex(list, id);
+  if (idx < 0) return;
+  const [removed] = STATE[list].splice(idx, 1);
+  if (focusedItemId === id) focusedItemId = null;
+  renderList(list);
+  renderDone();
+  updateCounts();
+  saveAll();
+  showUndoToast(removed, list, idx);
+}
+
+function deletePermanently(id, sourceList) {
+  const idx = findIndex(sourceList, id);
+  if (idx < 0) return;
+  STATE[sourceList].splice(idx, 1);
+  renderDone();
+  updateCounts();
+  saveAll();
+}
+
+function moveBetweenLists(id, fromList, toList) {
+  if (fromList === toList) return;
+  const idx = findIndex(fromList, id);
+  if (idx < 0) return;
+  const [item] = STATE[fromList].splice(idx, 1);
+  item.enteredListAt = Date.now();
+  STATE[toList].push(item);
+  renderList(fromList);
+  renderList(toList);
+  renderDone();
+  updateCounts();
+  saveAll();
+  // refocus the item in its new column
+  setTimeout(() => {
+    const li = document.querySelector(`li.item[data-id="${id}"]`);
+    if (li) li.focus({ preventScroll: true });
+  }, 0);
+}
+
+// ===== Undo toast =====
+function showUndoToast(item, list, idx) {
+  const toast = document.getElementById('toast');
+  const msg = document.getElementById('toastMsg');
+  const undo = document.getElementById('toastUndo');
+  msg.textContent = `Deleted "${truncate(item.text, 40)}"`;
+  toast.classList.add('show');
+  if (pendingDelete && pendingDelete.timer) clearTimeout(pendingDelete.timer);
+  pendingDelete = {
+    item, list, idx,
+    timer: setTimeout(() => {
+      toast.classList.remove('show');
+      pendingDelete = null;
+    }, 5000),
+  };
+  undo.onclick = () => {
+    if (!pendingDelete) return;
+    clearTimeout(pendingDelete.timer);
+    const insertAt = Math.min(pendingDelete.idx, STATE[pendingDelete.list].length);
+    STATE[pendingDelete.list].splice(insertAt, 0, pendingDelete.item);
+    const restoredId = pendingDelete.item.id;
+    const restoredList = pendingDelete.list;
+    pendingDelete = null;
+    toast.classList.remove('show');
+    renderList(restoredList);
+    renderDone();
+    updateCounts();
+    saveAll();
+    setTimeout(() => {
+      const li = document.querySelector(`li.item[data-id="${restoredId}"]`);
+      if (li) li.focus({ preventScroll: true });
+    }, 0);
+  };
+}
+function truncate(s, n) {
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+// ===== Keyboard handling =====
+function isTypingTarget(el) {
+  if (!el) return false;
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true;
+  if (el.isContentEditable) return true;
+  return false;
+}
+
+function focusedItemEl() {
+  const el = document.activeElement;
+  if (el && el.classList && el.classList.contains('item')) return el;
+  return null;
+}
+
+function navigate(dir) {
+  const cur = focusedItemEl();
+  if (!cur) {
+    const first = document.querySelector('li.item');
+    if (first) first.focus();
+    return;
+  }
+  const list = cur.dataset.list;
+  const items = Array.from(document.querySelectorAll(`ul.list[data-list="${list}"] li.item`));
+  const idx = items.indexOf(cur);
+  const next = items[idx + dir];
+  if (next) next.focus();
+}
+
+function focusOtherColumn() {
+  const cur = focusedItemEl();
+  const fromList = cur ? cur.dataset.list : 'active';
+  const toList = fromList === 'active' ? 'tracking' : 'active';
+  const targetItems = Array.from(document.querySelectorAll(`ul.list[data-list="${toList}"] li.item`));
+  if (targetItems.length === 0) return;
+  // Try to focus the item at the same vertical index, clamped
+  let targetIdx = 0;
+  if (cur) {
+    const sourceItems = Array.from(document.querySelectorAll(`ul.list[data-list="${fromList}"] li.item`));
+    targetIdx = Math.min(sourceItems.indexOf(cur), targetItems.length - 1);
+    if (targetIdx < 0) targetIdx = 0;
+  }
+  targetItems[targetIdx].focus();
+}
+
+document.addEventListener('keydown', (e) => {
+  // Cmd/Ctrl+Z works even from anywhere outside an input — for undoing the last delete
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !isTypingTarget(e.target)) {
+    if (pendingDelete) {
+      e.preventDefault();
+      document.getElementById('toastUndo').click();
+      return;
+    }
+  }
+  if (isTypingTarget(e.target)) return;
+
+  const cur = focusedItemEl();
+
+  if (e.key === 'ArrowUp')   { e.preventDefault(); navigate(-1); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); navigate(1); return; }
+
+  // `n` jumps focus to the current column's add-task input
+  if (e.key === 'n' || e.key === 'N') {
+    const list = cur ? cur.dataset.list : 'active';
+    const input = document.querySelector(`input[data-input="${list}"]`);
+    if (input) {
+      e.preventDefault();
+      input.focus();
+    }
+    return;
+  }
+
+  // ←/→ moves focus across columns; Shift+←/→ moves the item itself
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    if (e.shiftKey) {
+      if (!cur) return;
+      const id = cur.dataset.id;
+      const list = cur.dataset.list;
+      if (e.key === 'ArrowLeft' && list === 'tracking') {
+        e.preventDefault();
+        moveBetweenLists(id, 'tracking', 'active');
+      } else if (e.key === 'ArrowRight' && list === 'active') {
+        e.preventDefault();
+        moveBetweenLists(id, 'active', 'tracking');
+      }
+    } else {
+      const fromList = cur ? cur.dataset.list : null;
+      if (e.key === 'ArrowLeft' && fromList !== 'active') {
+        e.preventDefault();
+        focusOtherColumn();
+      } else if (e.key === 'ArrowRight' && fromList !== 'tracking') {
+        e.preventDefault();
+        focusOtherColumn();
+      }
+    }
+    return;
+  }
+
+  if (!cur) return;
+  const id = cur.dataset.id;
+  const list = cur.dataset.list;
+  if (e.key === '0') { e.preventDefault(); setPriority(id, list, 0); return; }
+  if (e.key === '1') { e.preventDefault(); setPriority(id, list, 1); return; }
+  if (e.key === '2') { e.preventDefault(); setPriority(id, list, 2); return; }
+  if (e.key === ' ') { e.preventDefault(); toggleDone(id, list, true); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    deleteItem(id, list);
+    return;
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const textEl = cur.querySelector('.text');
+    const item = findItem(list, id);
+    if (textEl && item) startEdit(textEl, item, list);
+    return;
+  }
+});
+
+// ===== Wiring =====
+document.querySelectorAll('input[data-input]').forEach(input => {
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && input.value.trim()) {
+      addItem(input.dataset.input, input.value);
+      input.value = '';
+    }
+  });
+});
+
+document.querySelectorAll('.col').forEach(col => {
+  col.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    col.classList.add('drop-target');
+  });
+  col.addEventListener('dragleave', (e) => {
+    if (!col.contains(e.relatedTarget)) col.classList.remove('drop-target');
+  });
+  col.addEventListener('drop', (e) => {
+    e.preventDefault();
+    col.classList.remove('drop-target');
+    let payload;
+    try { payload = JSON.parse(e.dataTransfer.getData('text/plain')); }
+    catch { return; }
+    if (!payload || !payload.id) return;
+    moveBetweenLists(payload.id, payload.from, col.dataset.list);
+  });
+});
+
+// ===== Settings modal =====
+const settingsBackdrop = document.getElementById('settingsBackdrop');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsClose = document.getElementById('settingsClose');
+
+function openSettings(initialTab) {
+  // Populate fields from current config
+  document.getElementById('ghOwner').value = (appConfig.github && appConfig.github.owner) || 'tigellus';
+  document.getElementById('ghRepo').value = (appConfig.github && appConfig.github.repo) || 'todo-data';
+  document.getElementById('ghBranch').value = (appConfig.github && appConfig.github.branch) || 'main';
+  document.getElementById('ghToken').value = (appConfig.github && appConfig.github.token) || '';
+  hideGhStatus();
+  selectModeTab(initialTab || (mode === 'github' ? 'github' : 'local'));
+  settingsBackdrop.classList.add('show');
+}
+function closeSettings() { settingsBackdrop.classList.remove('show'); }
+
+settingsBtn.addEventListener('click', () => openSettings());
+settingsClose.addEventListener('click', closeSettings);
+settingsBackdrop.addEventListener('click', (e) => {
+  if (e.target === settingsBackdrop) closeSettings();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && settingsBackdrop.classList.contains('show')) {
+    closeSettings();
+  }
+});
+
+function selectModeTab(name) {
+  document.querySelectorAll('.mode-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.modeTab === name);
+  });
+  document.querySelectorAll('.mode-content').forEach(c => {
+    c.classList.toggle('active', c.dataset.modeContent === name);
+  });
+}
+document.querySelectorAll('.mode-tab').forEach(btn => {
+  btn.addEventListener('click', () => selectModeTab(btn.dataset.modeTab));
+});
+
+// Local mode actions in modal
+document.getElementById('localConnectBtn').addEventListener('click', async () => {
+  await pickFolder();
+  if (dirHandle) {
+    appConfig.mode = 'local';
+    mode = 'local';
+    saveConfig();
+    closeSettings();
+  }
+});
+document.getElementById('localDisconnectBtn').addEventListener('click', async () => {
+  dirHandle = null;
+  try { await idbPut(IDB_KEY, null); } catch {}
+  if (mode === 'local') {
+    mode = 'none';
+    appConfig.mode = 'none';
+    saveConfig();
+    setSyncStatus('warn', 'Local only');
+  }
+  closeSettings();
+});
+
+// GitHub token visibility toggle
+document.getElementById('ghTokenEye').addEventListener('click', () => {
+  const inp = document.getElementById('ghToken');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+});
+
+function showGhStatus(text, kind) {
+  const el = document.getElementById('ghStatus');
+  el.textContent = text;
+  el.className = 'gh-status show ' + (kind || '');
+}
+function hideGhStatus() {
+  const el = document.getElementById('ghStatus');
+  el.className = 'gh-status';
+  el.textContent = '';
+}
+function readGhFormIntoConfig() {
+  appConfig.github = {
+    owner: document.getElementById('ghOwner').value.trim(),
+    repo: document.getElementById('ghRepo').value.trim(),
+    branch: (document.getElementById('ghBranch').value.trim() || 'main'),
+    token: document.getElementById('ghToken').value.trim(),
+  };
+}
+
+document.getElementById('ghTestBtn').addEventListener('click', async () => {
+  readGhFormIntoConfig();
+  if (!ghEnabled()) { showGhStatus('Fill in owner, repo, and token.', 'err'); return; }
+  showGhStatus('Testing…');
+  try {
+    const r = await ghTestConnection();
+    showGhStatus(`OK — ${r.full_name} (private), default branch: ${r.default_branch}`, 'ok');
+  } catch (err) {
+    showGhStatus('Failed: ' + err.message, 'err');
+  }
+});
+
+document.getElementById('ghSaveBtn').addEventListener('click', async () => {
+  readGhFormIntoConfig();
+  if (!ghEnabled()) { showGhStatus('Fill in owner, repo, and token.', 'err'); return; }
+  showGhStatus('Connecting…');
+  try {
+    await ghTestConnection();
+    // Try to load existing data
+    const hadRemote = await ghLoadAll();
+    if (!hadRemote && (STATE.active.length || STATE.tracking.length)) {
+      // Seed the repo with current local data
+      showGhStatus('Repo empty — seeding with current data…', 'ok');
+      await ghSaveAll();
+    }
+    appConfig.mode = 'github';
+    mode = 'github';
+    saveConfig();
+    lastSyncedAt = Date.now();
+    setSyncStatus('ok', '');
+    refreshSyncedLabel();
+    render();
+    showGhStatus('Connected.', 'ok');
+    setTimeout(closeSettings, 600);
+  } catch (err) {
+    showGhStatus('Failed: ' + err.message, 'err');
+  }
+});
+
+document.getElementById('ghDisconnectBtn').addEventListener('click', () => {
+  if (!confirm('Disconnect GitHub? Local data stays in this browser.')) return;
+  appConfig.github = null;
+  if (mode === 'github') {
+    mode = 'none';
+    appConfig.mode = 'none';
+  }
+  saveConfig();
+  setSyncStatus('warn', 'Local only');
+  closeSettings();
+});
+
+const doneToggle = document.getElementById('doneToggle');
+const doneList = document.getElementById('doneList');
+doneToggle.addEventListener('click', () => {
+  const open = doneList.classList.toggle('open');
+  doneToggle.classList.toggle('open', open);
+});
+
+const helpToggle = document.getElementById('helpToggle');
+const helpPanel = document.getElementById('helpPanel');
+helpToggle.addEventListener('click', () => {
+  helpPanel.classList.toggle('show');
+});
+
+// Refresh age strings every minute (keeps "Xd" labels accurate without re-rendering everything)
+setInterval(() => {
+  document.querySelectorAll('ul.list[data-list="tracking"] li.item').forEach(li => {
+    const id = li.dataset.id;
+    const item = findItem('tracking', id);
+    if (!item) return;
+    const ageEl = li.querySelector('.age');
+    if (!ageEl) return;
+    const cls = ageClass(item.enteredListAt);
+    ageEl.className = 'age' + (cls ? ' ' + cls : '');
+    ageEl.textContent = ageString(item.enteredListAt);
+  });
+}, 60000);
+
+// ===== Boot =====
+(async () => {
+  loadConfig();
+  loadLocal();
+  render();
+
+  if (mode === 'github' && ghEnabled()) {
+    try {
+      setSyncStatus('warn', 'Loading from GitHub…');
+      await ghLoadAll();
+      lastSyncedAt = Date.now();
+      setSyncStatus('ok', '');
+      refreshSyncedLabel();
+      render();
+    } catch (err) {
+      console.error('GH boot load failed', err);
+      setSyncStatus('err', 'GitHub load failed: ' + (err.message || ''));
+    }
+    return;
+  }
+
+  if (mode === 'local') {
+    const ok = await tryRestoreFolder();
+    if (!ok) {
+      // Permission lost or handle gone — fall back to "none" but keep config so user can re-grant
+      setSyncStatus('warn', 'Local only — open Settings to reconnect');
+    }
+    return;
+  }
+
+  // First-run / disconnected
+  setSyncStatus('warn', 'Local only — open Settings to connect');
+})();
+</script>
+</body>
+</html>
