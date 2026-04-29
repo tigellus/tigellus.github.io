@@ -153,6 +153,115 @@
     align-items: center;
   }
 
+  /* ===== Vision section ===== */
+  .vision-section { margin-bottom: 20px; }
+  .vision-toggle {
+    font: inherit;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+  .vision-toggle:hover {
+    background: var(--hover);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .vision-toggle .vision-arrow {
+    display: inline-block;
+    transition: transform 160ms ease;
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .vision-toggle.open .vision-arrow { transform: rotate(90deg); color: var(--hi); }
+  .vision-toggle .vision-label {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  .vision-toggle .vision-hint {
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .vision-toggle.open .vision-hint { display: none; }
+
+  .vision-body {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px 14px;
+    margin-top: 10px;
+  }
+  .vision-body.open { display: block; }
+
+  .vision-bullets {
+    margin: 0;
+    padding: 0 0 0 22px;
+    list-style: disc;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .vision-bullets li { margin: 4px 0; }
+  .vision-bullets li::marker { color: var(--hi); }
+  .vision-empty {
+    color: var(--muted);
+    font-style: italic;
+    margin: 0;
+  }
+
+  .vision-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+    gap: 8px;
+  }
+  .vision-actions button {
+    font: inherit;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .vision-actions button:hover { background: var(--hover); }
+  .vision-actions button.primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+  .vision-actions button.primary:hover { opacity: 0.9; }
+
+  .vision-textarea {
+    width: 100%;
+    min-height: 140px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    outline: none;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+  .vision-textarea:focus { border-color: var(--focus); }
+  .vision-edit-hint {
+    margin: 6px 2px 0;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
   .columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -584,6 +693,31 @@
     </div>
   </div>
 
+  <section class="vision-section">
+    <button class="vision-toggle" id="visionToggle" type="button" aria-expanded="false" aria-controls="visionBody">
+      <span class="vision-arrow">▸</span>
+      <span class="vision-label">Vision</span>
+      <span class="vision-hint">click to reveal</span>
+    </button>
+    <div class="vision-body" id="visionBody">
+      <div class="vision-view" id="visionView">
+        <ul class="vision-bullets" id="visionBullets"></ul>
+        <p class="vision-empty" id="visionEmpty" hidden>No vision set yet — click Edit to add one.</p>
+        <div class="vision-actions">
+          <button id="visionEditBtn" type="button">Edit</button>
+        </div>
+      </div>
+      <div class="vision-edit" id="visionEdit" hidden>
+        <textarea class="vision-textarea" id="visionTextarea" placeholder="One bullet per line…" spellcheck="true"></textarea>
+        <p class="vision-edit-hint">One bullet per line. ⌘/Ctrl+Enter to save, Esc to cancel.</p>
+        <div class="vision-actions">
+          <button id="visionCancelBtn" type="button">Cancel</button>
+          <button id="visionSaveBtn" class="primary" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="columns">
     <section class="col" data-list="active">
       <h2>Active <span class="count" data-count="active">0</span></h2>
@@ -675,6 +809,7 @@
 const STATE = {
   active: [],
   tracking: [],
+  vision: { text: '' },
 };
 
 const STORAGE_KEY = 'todo-app-fallback-v1';
@@ -688,7 +823,7 @@ let sortTimers = {};
 let pendingDelete = null;
 let focusedItemId = null;
 let saveQueued = false;
-let knownMtimes = { 'active.json': 0, 'tracking.json': 0 };
+let knownMtimes = { 'active.json': 0, 'tracking.json': 0, 'vision.json': 0 };
 let suppressNextPoll = false;
 let lastSyncedAt = null;
 
@@ -699,7 +834,7 @@ const CONFIG_KEY = 'todo-app-config-v2';
 let appConfig = { mode: 'none', github: null };
 
 // GitHub state
-let ghShas = { 'active.json': null, 'tracking.json': null };
+let ghShas = { 'active.json': null, 'tracking.json': null, 'vision.json': null };
 let ghKnownBranchSha = null;
 
 function loadConfig() {
@@ -893,10 +1028,16 @@ async function loadFromFolder() {
   try {
     const a = await readJsonFile('active.json');
     const t = await readJsonFile('tracking.json');
+    const v = await readJsonFile('vision.json');
     if (a && Array.isArray(a.items)) { STATE.active = migrateItems(a.items); foundAny = true; }
     if (t && Array.isArray(t.items)) { STATE.tracking = migrateItems(t.items); foundAny = true; }
+    if (v && typeof v.text === 'string') { STATE.vision = { text: v.text }; foundAny = true; }
     // Reflect on-disk freshness in the header
-    lastSyncedAt = Math.max(knownMtimes['active.json'] || 0, knownMtimes['tracking.json'] || 0) || Date.now();
+    lastSyncedAt = Math.max(
+      knownMtimes['active.json'] || 0,
+      knownMtimes['tracking.json'] || 0,
+      knownMtimes['vision.json'] || 0
+    ) || Date.now();
     refreshSyncedLabel();
     return foundAny;
   } catch (err) {
@@ -918,6 +1059,7 @@ function loadLocal() {
     const parsed = JSON.parse(raw);
     if (parsed.active) STATE.active = migrateItems(parsed.active);
     if (parsed.tracking) STATE.tracking = migrateItems(parsed.tracking);
+    if (parsed.vision && typeof parsed.vision.text === 'string') STATE.vision = { text: parsed.vision.text };
   } catch (err) { console.warn('localStorage load failed', err); }
 }
 
@@ -953,6 +1095,7 @@ async function saveAll() {
       suppressNextPoll = true;
       await writeJsonFile('active.json', { items: STATE.active });
       await writeJsonFile('tracking.json', { items: STATE.tracking });
+      await writeJsonFile('vision.json', { text: STATE.vision.text || '' });
       lastSyncedAt = Date.now();
       setSyncStatus('ok', '');
       refreshSyncedLabel();
@@ -978,7 +1121,14 @@ async function pollFiles() {
     const tFile = await tHandle.getFile();
     const aChanged = aFile.lastModified > knownMtimes['active.json'] + 100;
     const tChanged = tFile.lastModified > knownMtimes['tracking.json'] + 100;
-    if (aChanged || tChanged) {
+    // vision.json may not exist yet — treat absence as "no change"
+    let vChanged = false;
+    try {
+      const vHandle = await dirHandle.getFileHandle('vision.json');
+      const vFile = await vHandle.getFile();
+      vChanged = vFile.lastModified > (knownMtimes['vision.json'] || 0) + 100;
+    } catch {}
+    if (aChanged || tChanged || vChanged) {
       await loadFromFolder();
       render();
       flashStatus(`Reloaded — file changed externally`);
@@ -1147,17 +1297,21 @@ async function ghLoadAll() {
   let foundAny = false;
   const a = await ghReadFile('active.json');
   const t = await ghReadFile('tracking.json');
+  const v = await ghReadFile('vision.json');
   if (a && Array.isArray(a.items)) { STATE.active = migrateItems(a.items); foundAny = true; }
   if (t && Array.isArray(t.items)) { STATE.tracking = migrateItems(t.items); foundAny = true; }
+  if (v && typeof v.text === 'string') { STATE.vision = { text: v.text }; foundAny = true; }
   try { ghKnownBranchSha = await ghGetBranchSha(); } catch {}
   return foundAny;
 }
 
 async function ghSaveAll() {
-  // Sequential PUTs (each is one commit). Two API calls per save batch.
+  // Sequential PUTs. GitHub no-ops PUTs whose content is unchanged, so vision
+  // doesn't add a commit unless it actually changed.
   const ts = new Date().toISOString();
   await ghWriteFile('active.json', { items: STATE.active }, `Update active.json · ${ts}`);
   await ghWriteFile('tracking.json', { items: STATE.tracking }, `Update tracking.json · ${ts}`);
+  await ghWriteFile('vision.json', { text: STATE.vision.text || '' }, `Update vision.json · ${ts}`);
   try { ghKnownBranchSha = await ghGetBranchSha(); } catch {}
 }
 
@@ -1256,7 +1410,35 @@ function render() {
   renderList('active');
   renderList('tracking');
   renderDone();
+  renderVision();
   updateCounts();
+}
+
+// ===== Vision =====
+function visionBullets(text) {
+  // One bullet per non-empty line. Strip leading bullet markers in case the
+  // user pasted them in.
+  return (text || '')
+    .split('\n')
+    .map(s => s.replace(/^[\s•\-*]+/, '').trim())
+    .filter(s => s.length > 0);
+}
+function renderVision() {
+  const ul = document.getElementById('visionBullets');
+  const empty = document.getElementById('visionEmpty');
+  if (!ul || !empty) return;
+  ul.innerHTML = '';
+  const bullets = visionBullets(STATE.vision && STATE.vision.text);
+  if (bullets.length === 0) {
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  for (const b of bullets) {
+    const li = document.createElement('li');
+    li.textContent = b;
+    ul.appendChild(li);
+  }
 }
 
 function updateCounts() {
@@ -1882,6 +2064,67 @@ const helpToggle = document.getElementById('helpToggle');
 const helpPanel = document.getElementById('helpPanel');
 helpToggle.addEventListener('click', () => {
   helpPanel.classList.toggle('show');
+});
+
+// ===== Vision section interactions =====
+const visionToggle = document.getElementById('visionToggle');
+const visionBody = document.getElementById('visionBody');
+const visionView = document.getElementById('visionView');
+const visionEdit = document.getElementById('visionEdit');
+const visionEditBtn = document.getElementById('visionEditBtn');
+const visionSaveBtn = document.getElementById('visionSaveBtn');
+const visionCancelBtn = document.getElementById('visionCancelBtn');
+const visionTextarea = document.getElementById('visionTextarea');
+
+function visionEnterView() {
+  visionEdit.hidden = true;
+  visionView.hidden = false;
+}
+function visionEnterEdit() {
+  visionTextarea.value = STATE.vision.text || '';
+  visionView.hidden = true;
+  visionEdit.hidden = false;
+  setTimeout(() => {
+    visionTextarea.focus();
+    // Move cursor to end
+    const len = visionTextarea.value.length;
+    try { visionTextarea.setSelectionRange(len, len); } catch {}
+  }, 0);
+}
+
+visionToggle.addEventListener('click', () => {
+  const open = visionBody.classList.toggle('open');
+  visionToggle.classList.toggle('open', open);
+  visionToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (!open) {
+    // Collapsing: discard any in-progress edit (privacy)
+    visionEnterView();
+  }
+});
+
+visionEditBtn.addEventListener('click', visionEnterEdit);
+visionCancelBtn.addEventListener('click', visionEnterView);
+
+visionSaveBtn.addEventListener('click', () => {
+  const newText = visionTextarea.value;
+  if (newText !== (STATE.vision.text || '')) {
+    STATE.vision = { text: newText };
+    renderVision();
+    saveAll();
+  }
+  visionEnterView();
+});
+
+visionTextarea.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    visionSaveBtn.click();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    visionCancelBtn.click();
+  }
+  // Don't bubble to global keydown handlers (n shortcut, arrow nav, etc.)
+  e.stopPropagation();
 });
 
 // Refresh age strings every minute (keeps "Xd" labels accurate without re-rendering everything)

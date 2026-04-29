@@ -7,6 +7,7 @@ This folder is the source-of-truth for a personal TODO web app the user (Vale, G
 - **`todo.html`** — the entire app. Self-contained: HTML + CSS + vanilla JS, no build step, no external scripts. **Edit this file directly.** Never split it into multiple files; the user values single-file portability.
 - **`active.json`** — the user's "Active" list (live data). Schema in §"Item schema" below.
 - **`tracking.json`** — the user's "Tracking" list (waiting-for-others items).
+- **`vision.json`** — `{ "text": "..." }` — the user's "Vision" (overarching goals). Rendered as bullets at the top of the app, collapsed by default for privacy. One bullet per `\n`-separated line.
 - **`CLAUDE.md`** — this file.
 
 There is **no build step, no package.json, no node_modules**. To verify a JS change, extract the `<script>` block and run `node --check`:
@@ -39,6 +40,8 @@ Mode is stored in `localStorage` under `todo-app-config-v2` and dispatched on bo
 ```
 
 **Important**: `enteredListAt` resets on cross-list moves but NOT on priority changes or rename. The `migrateItems` function backfills it from `createdAt` for old items.
+
+`STATE.vision` is `{ text: '' }` — initialized empty if `vision.json` is missing or malformed. `loadLocal`/`loadFromFolder`/`ghLoadAll` all guard with `typeof v.text === 'string'` so legacy folders without `vision.json` still work.
 
 ## Architecture pointers (line numbers may drift, grep for the symbol)
 
