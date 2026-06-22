@@ -822,7 +822,8 @@ let dirHandle = null;
 let sortTimers = {};
 let pendingDelete = null;
 let focusedItemId = null;
-let saveQueued = false;
+let saveQueued = false;   // a save (debounce + write) is in progress
+let saveDirty = false;    // an edit arrived mid-save → flush again when done
 let knownMtimes = { 'active.json': 0, 'tracking.json': 0, 'vision.json': 0 };
 let suppressNextPoll = false;
 let lastSyncedAt = null;
@@ -1065,33 +1066,30 @@ function loadLocal() {
 
 async function saveAll() {
   saveLocal();
-  if (saveQueued) return;
+  // A save is already running. Mark dirty so we flush the latest state once it
+  // finishes, rather than starting a second write that races the first.
+  if (saveQueued) { saveDirty = true; return; }
   saveQueued = true;
+  saveDirty = false;
 
-  if (mode === 'github') {
-    // 1.5s debounce so rapid edits coalesce into one commit pair
-    await new Promise(r => setTimeout(r, 1500));
-    saveQueued = false;
-    if (!ghEnabled()) return;
-    try {
+  try {
+    if (mode === 'github') {
+      // 1.5s debounce so rapid edits coalesce into one commit pair
+      await new Promise(r => setTimeout(r, 1500));
+      if (!ghEnabled()) return;
+      // Edits up to this point are captured by the write below; only edits
+      // that land *during* the write should trigger a re-flush.
+      saveDirty = false;
       setSyncStatus('warn', 'Saving…');
       await ghSaveAll();
       lastSyncedAt = Date.now();
       setSyncStatus('ok', '');
       refreshSyncedLabel();
       broadcast({ type: 'saved', from: TAB_ID });
-    } catch (err) {
-      console.error('GH save error', err);
-      setSyncStatus('err', 'GitHub save failed: ' + (err.message || ''));
-    }
-    return;
-  }
-
-  if (mode === 'local') {
-    if (!dirHandle) { saveQueued = false; return; }
-    await new Promise(r => setTimeout(r, 80));
-    saveQueued = false;
-    try {
+    } else if (mode === 'local') {
+      if (!dirHandle) return;
+      await new Promise(r => setTimeout(r, 80));
+      saveDirty = false;
       suppressNextPoll = true;
       await writeJsonFile('active.json', { items: STATE.active });
       await writeJsonFile('tracking.json', { items: STATE.tracking });
@@ -1100,14 +1098,17 @@ async function saveAll() {
       setSyncStatus('ok', '');
       refreshSyncedLabel();
       broadcast({ type: 'saved', from: TAB_ID });
-    } catch (err) {
-      console.error('Save error', err);
-      setSyncStatus('err', 'Save failed');
     }
-    return;
+    // 'none' mode — localStorage only (already written above), nothing to do.
+  } catch (err) {
+    console.error('Save error', err);
+    setSyncStatus('err', mode === 'github' ? 'GitHub save failed: ' + (err.message || '') : 'Save failed');
+  } finally {
+    saveQueued = false;
   }
 
-  saveQueued = false; // 'none' mode — only localStorage
+  // An edit arrived while we were writing → flush the latest state now.
+  if (saveDirty) saveAll();
 }
 
 // ===== External-change polling =====
@@ -1261,21 +1262,21 @@ async function ghWriteFile(path, data, message) {
   };
   if (ghShas[path]) body.sha = ghShas[path];
 
-  let res = await fetch(url, {
+  const doPut = () => fetch(url, {
     method: 'PUT',
     headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 
-  // Conflict — refresh sha and retry once
-  if (res.status === 409 || res.status === 422) {
+  let res = await doPut();
+  // Conflict — another tab committed first, so our sha is stale. Refetch the
+  // current sha and retry a few times (with jitter so racing tabs de-sync)
+  // before giving up. One retry isn't enough when 2+ tabs save at once.
+  for (let attempt = 0; (res.status === 409 || res.status === 422) && attempt < 4; attempt++) {
     await ghReadFile(path);
-    body.sha = ghShas[path];
-    res = await fetch(url, {
-      method: 'PUT',
-      headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    if (ghShas[path]) body.sha = ghShas[path]; else delete body.sha;
+    await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+    res = await doPut();
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
