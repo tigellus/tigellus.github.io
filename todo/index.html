@@ -853,6 +853,138 @@ function saveConfig() {
   try { localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig)); } catch {}
 }
 
+// ===== Error logging (self-healing telemetry) =====
+// Every error is recorded so the log file alone is enough to diagnose a bug:
+// message + stack + source location, the storage mode, the browser, a build
+// tag (which code version produced it), a snapshot of list sizes, and a
+// breadcrumb trail of the recent user actions leading up to the failure.
+//
+// Durable store = a capped localStorage ring buffer (synchronous, can't fail,
+// survives reloads). It's then best-effort mirrored to errors.json in the
+// active backend (the todo-data repo on GitHub, or the local folder).
+//
+// Two invariants make this safe: the logger NEVER throws (everything is
+// wrapped) and NEVER recurses (an error raised while logging, or while
+// flushing, is swallowed — it can't trigger more logging).
+const APP_BUILD = '2026-06-22';   // bump this string on each deploy
+const ERR_KEY = 'todo-app-errors-v1';
+const ERR_MAX = 50;               // keep the last N error entries
+const CRUMB_MAX = 25;             // keep the last N user actions
+let breadcrumbs = [];
+let inLogger = false;             // recursion guard
+let errFlushTimer = null;
+
+function breadcrumb(action, detail) {
+  try {
+    breadcrumbs.push({ t: new Date().toISOString(), a: action, d: detail ?? null });
+    if (breadcrumbs.length > CRUMB_MAX) breadcrumbs.splice(0, breadcrumbs.length - CRUMB_MAX);
+  } catch {}
+}
+
+function readErrorLog() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(ERR_KEY) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+function logError(type, info) {
+  if (inLogger) return;            // ignore errors raised inside the logger itself
+  inLogger = true;
+  try {
+    info = info || {};
+    const entry = {
+      ts: new Date().toISOString(),
+      epoch: Date.now(),
+      build: APP_BUILD,
+      type,                        // 'error' | 'unhandledrejection' | 'caught'
+      context: info.context || '',
+      message: info.message || '',
+      stack: info.stack || '',
+      source: info.source || '',
+      line: info.line ?? null,
+      col: info.col ?? null,
+      mode,
+      online: navigator.onLine,
+      url: location.href,
+      userAgent: navigator.userAgent,
+      state: {
+        active: STATE.active.length,
+        tracking: STATE.tracking.length,
+        done: STATE.active.filter(i => i.done).length + STATE.tracking.filter(i => i.done).length,
+        lastSyncedAt,
+        ghBranchSha: ghKnownBranchSha,
+      },
+      breadcrumbs: breadcrumbs.slice(-15),
+    };
+    const log = readErrorLog();
+    const last = log[log.length - 1];
+    // Collapse consecutive identical errors (e.g. a failing 3s poll) into a count
+    if (last && last.type === type && last.message === entry.message) {
+      last.count = (last.count || 1) + 1;
+      last.ts = entry.ts; last.epoch = entry.epoch;
+      last.breadcrumbs = entry.breadcrumbs;
+    } else {
+      log.push(entry);
+    }
+    while (log.length > ERR_MAX) log.shift();
+    try { localStorage.setItem(ERR_KEY, JSON.stringify(log)); } catch {}
+    scheduleErrorFlush();
+  } catch {} finally {
+    inLogger = false;
+  }
+}
+
+function scheduleErrorFlush() {
+  if (errFlushTimer) return;       // one pending flush at a time
+  errFlushTimer = setTimeout(() => { errFlushTimer = null; flushErrorLog(); }, 3000);
+}
+
+async function flushErrorLog() {
+  // Best-effort mirror to the backend. Any failure is swallowed (the log stays
+  // in localStorage and flushes next time) and is NEVER re-logged.
+  try {
+    const log = readErrorLog();
+    if (!log.length) return;
+    // Don't fight an in-flight save for the branch — try again shortly.
+    if (saveQueued) { scheduleErrorFlush(); return; }
+    const payload = {
+      build: APP_BUILD,
+      updatedAt: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      count: log.length,
+      entries: log,
+    };
+    if (mode === 'github' && ghEnabled()) {
+      await ghWriteFile('errors.json', payload, `Update errors.json · ${payload.updatedAt}`);
+      try { ghKnownBranchSha = await ghGetBranchSha(); } catch {}
+    } else if (mode === 'local' && dirHandle) {
+      suppressNextPoll = true;
+      await writeJsonFile('errors.json', payload);
+    }
+  } catch (e) {
+    console.warn('Error-log flush failed (kept locally)', e);
+  }
+}
+
+// Global catch-alls. Installed first so nothing slips through.
+window.addEventListener('error', (e) => {
+  logError('error', {
+    message: e.message || (e.error && e.error.message) || 'Unknown error',
+    stack: e.error && e.error.stack,
+    source: e.filename, line: e.lineno, col: e.colno,
+  });
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e.reason;
+  logError('unhandledrejection', {
+    message: (r && r.message) || String(r),
+    stack: r && r.stack,
+  });
+});
+// Flush any errors left over from a previous session once we're settled.
+setTimeout(() => { if (readErrorLog().length) flushErrorLog(); }, 5000);
+
 // ===== UUID =====
 function uid() {
   return 'i_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
@@ -1044,6 +1176,7 @@ async function loadFromFolder() {
   } catch (err) {
     console.error('Load error', err);
     setSyncStatus('err', 'Load error');
+    logError('caught', { context: 'loadFromFolder', message: err.message, stack: err.stack });
     return false;
   }
 }
@@ -1071,6 +1204,7 @@ async function saveAll() {
   if (saveQueued) { saveDirty = true; return; }
   saveQueued = true;
   saveDirty = false;
+  breadcrumb('save', mode);
 
   try {
     if (mode === 'github') {
@@ -1103,6 +1237,7 @@ async function saveAll() {
   } catch (err) {
     console.error('Save error', err);
     setSyncStatus('err', mode === 'github' ? 'GitHub save failed: ' + (err.message || '') : 'Save failed');
+    logError('caught', { context: 'saveAll:' + mode, message: err.message, stack: err.stack });
   } finally {
     saveQueued = false;
   }
@@ -1134,7 +1269,9 @@ async function pollFiles() {
       render();
       flashStatus(`Reloaded — file changed externally`);
     }
-  } catch {}
+  } catch (err) {
+    logError('caught', { context: 'pollFiles', message: err.message, stack: err.stack });
+  }
 }
 let _statusFlashTimer = null;
 function flashStatus(msg) {
@@ -1344,6 +1481,7 @@ async function ghPoll() {
     }
   } catch (err) {
     console.warn('GH poll error', err);
+    logError('caught', { context: 'ghPoll', message: err.message, stack: err.stack });
   }
 }
 
@@ -1609,6 +1747,7 @@ function startEdit(textEl, item, list) {
       const newText = textEl.textContent.trim();
       if (newText && newText !== item.text) {
         item.text = newText;
+        breadcrumb('rename', list);
         saveAll();
       } else {
         textEl.textContent = item.text;
@@ -1649,6 +1788,7 @@ function addItem(list, text) {
     enteredListAt: now,
     doneAt: null,
   });
+  breadcrumb('add', list);
   renderList(list);
   updateCounts();
   saveAll();
@@ -1659,6 +1799,7 @@ function setPriority(id, list, priority) {
   if (!item) return;
   if (item.priority === priority) return;
   item.priority = priority;
+  breadcrumb('priority', list + ':' + priority);
   const li = document.querySelector(`li.item[data-id="${id}"]`);
   if (li) {
     const badge = li.querySelector('.badge');
@@ -1683,6 +1824,7 @@ function toggleDone(id, list, markDone) {
   if (!item) return;
   item.done = !!markDone;
   item.doneAt = markDone ? Date.now() : null;
+  breadcrumb('done', list + ':' + !!markDone);
   if (focusedItemId === id) focusedItemId = null;
   renderList(list);
   renderDone();
@@ -1694,6 +1836,7 @@ function deleteItem(id, list) {
   const idx = findIndex(list, id);
   if (idx < 0) return;
   const [removed] = STATE[list].splice(idx, 1);
+  breadcrumb('delete', list);
   if (focusedItemId === id) focusedItemId = null;
   renderList(list);
   renderDone();
@@ -1718,6 +1861,7 @@ function moveBetweenLists(id, fromList, toList) {
   const [item] = STATE[fromList].splice(idx, 1);
   item.enteredListAt = Date.now();
   STATE[toList].push(item);
+  breadcrumb('move', fromList + '->' + toList);
   renderList(fromList);
   renderList(toList);
   renderDone();
@@ -2164,6 +2308,7 @@ setInterval(() => {
     } catch (err) {
       console.error('GH boot load failed', err);
       setSyncStatus('err', 'GitHub load failed: ' + (err.message || ''));
+      logError('caught', { context: 'boot:ghLoadAll', message: err.message, stack: err.stack });
     }
     return;
   }
