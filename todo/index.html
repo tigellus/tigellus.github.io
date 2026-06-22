@@ -722,7 +722,7 @@
     <section class="col" data-list="active">
       <h2>Active <span class="count" data-count="active">0</span></h2>
       <div class="input-row">
-        <input type="text" placeholder="Add a task…" data-input="active" autocomplete="off">
+        <input type="text" placeholder="Add a task…" data-input="active" autocomplete="off" readonly>
       </div>
       <ul class="list" data-list="active"></ul>
     </section>
@@ -730,7 +730,7 @@
     <section class="col" data-list="tracking">
       <h2>Tracking <span class="count" data-count="tracking">0</span></h2>
       <div class="input-row">
-        <input type="text" placeholder="Waiting on…" data-input="tracking" autocomplete="off">
+        <input type="text" placeholder="Waiting on…" data-input="tracking" autocomplete="off" readonly>
       </div>
       <ul class="list" data-list="tracking"></ul>
     </section>
@@ -1887,6 +1887,11 @@ document.addEventListener('keydown', (e) => {
 
 // ===== Wiring =====
 document.querySelectorAll('input[data-input]').forEach(input => {
+  // Start readonly so the browser's password manager never classifies these
+  // as username fields (it would otherwise offer a saved password here).
+  // Drop readonly on focus so typing works; restore on blur.
+  input.addEventListener('focus', () => input.removeAttribute('readonly'));
+  input.addEventListener('blur', () => input.setAttribute('readonly', ''));
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && input.value.trim()) {
       addItem(input.dataset.input, input.value);
