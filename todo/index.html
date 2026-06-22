@@ -327,6 +327,7 @@
     border-radius: 6px;
     cursor: grab;
     user-select: none;
+    touch-action: pan-y;   /* let the page scroll vertically; we handle horizontal swipes */
     transition: background 120ms ease, box-shadow 120ms ease;
     outline: none;
   }
@@ -690,6 +691,7 @@
       <div><kbd>Cmd</kbd>+<kbd>Z</kbd></div><div>Undo last delete (while toast is visible)</div>
       <div><kbd>n</kbd></div><div>Jump to "Add a task" input of the current column</div>
       <div><kbd>Esc</kbd></div><div>Leave the add input and return to the list</div>
+      <div><kbd>Swipe</kbd></div><div>On mobile, swipe an item sideways to move it to the other list</div>
     </div>
   </div>
 
@@ -1059,7 +1061,6 @@ function formatSyncedTime(ms) {
 }
 function refreshSyncedLabel() {
   if (!lastSyncedAt) return;
-  const lbl = document.getElementById('syncLabel');
   let suffix = '';
   if (mode === 'github' && ghEnabled()) {
     const c = ghCfg();
@@ -1069,8 +1070,11 @@ function refreshSyncedLabel() {
   } else {
     return;
   }
-  lbl.textContent = `Synced ${formatSyncedTime(lastSyncedAt)} (${relTime(lastSyncedAt)}) · ${suffix}`;
-  lbl.title = new Date(lastSyncedAt).toLocaleString();
+  const lbl = document.getElementById('syncLabel');
+  // Keep the label compact (esp. on mobile): show only the sync time. The
+  // repo/folder name moves to the hover tooltip — still available, off-screen.
+  lbl.textContent = `Synced ${formatSyncedTime(lastSyncedAt)} (${relTime(lastSyncedAt)})`;
+  lbl.title = `${suffix} · ${new Date(lastSyncedAt).toLocaleString()}`;
 }
 // Tick the relative time every 15s so "30s ago" updates without effort
 setInterval(refreshSyncedLabel, 15000);
@@ -1713,6 +1717,46 @@ function makeItemEl(item, list) {
   });
   li.addEventListener('dragend', () => li.classList.remove('dragging'));
 
+  // Touch swipe (mobile): swipe an item sideways to send it to the OTHER list.
+  // Only two lists exist, so direction doesn't matter — any horizontal swipe
+  // past the threshold toggles. Vertical drags fall through to normal scroll.
+  let sx = 0, sy = 0, sLock = null;   // sLock: null=undecided, 'h'=swiping, 'v'=scrolling
+  li.addEventListener('touchstart', (e) => {
+    if (text.dataset.editing === '1') { sLock = 'v'; return; }  // don't swipe while renaming
+    const t = e.changedTouches[0];
+    sx = t.clientX; sy = t.clientY; sLock = null;
+  }, { passive: true });
+  li.addEventListener('touchmove', (e) => {
+    if (sLock === 'v') return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (sLock === null) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;          // too small to decide yet
+      sLock = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+    }
+    if (sLock === 'h') {
+      e.preventDefault();                                        // claim the gesture from the scroller
+      li.style.transform = `translateX(${dx}px)`;
+      li.style.opacity = String(Math.max(0.35, 1 - Math.abs(dx) / 260));
+    }
+  }, { passive: false });
+  li.addEventListener('touchend', (e) => {
+    if (sLock !== 'h') { sLock = null; return; }
+    const dx = e.changedTouches[0].clientX - sx;
+    sLock = null;
+    li.style.transition = 'transform 160ms ease, opacity 160ms ease';
+    if (Math.abs(dx) > 70) {                                     // committed → fly off and move
+      const to = list === 'active' ? 'tracking' : 'active';
+      li.style.transform = `translateX(${dx > 0 ? window.innerWidth : -window.innerWidth}px)`;
+      li.style.opacity = '0';
+      setTimeout(() => moveBetweenLists(item.id, list, to), 130);
+    } else {                                                     // not far enough → snap back
+      li.style.transform = '';
+      li.style.opacity = '';
+    }
+    setTimeout(() => { li.style.transition = ''; }, 220);
+  });
+
   // Focus tracking
   li.addEventListener('focus', () => { focusedItemId = item.id; });
 
@@ -1842,7 +1886,24 @@ function deleteItem(id, list) {
   renderDone();
   updateCounts();
   saveAll();
-  showUndoToast(removed, list, idx);
+  pendingDelete = { item: removed, list, idx };
+  showToast(`Deleted "${truncate(removed.text, 40)}"`, { undo: undoDelete });
+}
+
+function undoDelete() {
+  if (!pendingDelete) return;
+  const { item, list, idx } = pendingDelete;
+  pendingDelete = null;
+  hideToast();
+  STATE[list].splice(Math.min(idx, STATE[list].length), 0, item);
+  renderList(list);
+  renderDone();
+  updateCounts();
+  saveAll();
+  setTimeout(() => {
+    const li = document.querySelector(`li.item[data-id="${item.id}"]`);
+    if (li) li.focus({ preventScroll: true });
+  }, 0);
 }
 
 function deletePermanently(id, sourceList) {
@@ -1859,6 +1920,7 @@ function moveBetweenLists(id, fromList, toList) {
   const idx = findIndex(fromList, id);
   if (idx < 0) return;
   const [item] = STATE[fromList].splice(idx, 1);
+  const prevEnteredAt = item.enteredListAt;   // preserved so undo restores the age badge
   item.enteredListAt = Date.now();
   STATE[toList].push(item);
   breadcrumb('move', fromList + '->' + toList);
@@ -1872,41 +1934,43 @@ function moveBetweenLists(id, fromList, toList) {
     const li = document.querySelector(`li.item[data-id="${id}"]`);
     if (li) li.focus({ preventScroll: true });
   }, 0);
+  // Non-intrusive confirmation + undo — important for the mobile swipe gesture.
+  pendingDelete = null;   // a move supersedes any open delete-undo window
+  showToast(`Moved to ${toList === 'active' ? 'Active' : 'Tracking'}`, {
+    undo: () => {
+      const j = findIndex(toList, id);
+      if (j < 0) return;
+      const [it] = STATE[toList].splice(j, 1);
+      it.enteredListAt = prevEnteredAt;
+      STATE[fromList].splice(Math.min(idx, STATE[fromList].length), 0, it);
+      breadcrumb('move:undo', toList + '->' + fromList);
+      renderList(fromList);
+      renderList(toList);
+      renderDone();
+      updateCounts();
+      saveAll();
+      hideToast();
+    },
+  });
 }
 
-// ===== Undo toast =====
-function showUndoToast(item, list, idx) {
+// ===== Toast (shared by delete + move) =====
+let toastTimer = null;
+function showToast(message, opts) {
+  opts = opts || {};
   const toast = document.getElementById('toast');
-  const msg = document.getElementById('toastMsg');
+  document.getElementById('toastMsg').textContent = message;
   const undo = document.getElementById('toastUndo');
-  msg.textContent = `Deleted "${truncate(item.text, 40)}"`;
+  undo.style.display = opts.undo ? '' : 'none';
+  undo.onclick = opts.undo ? () => opts.undo() : null;
   toast.classList.add('show');
-  if (pendingDelete && pendingDelete.timer) clearTimeout(pendingDelete.timer);
-  pendingDelete = {
-    item, list, idx,
-    timer: setTimeout(() => {
-      toast.classList.remove('show');
-      pendingDelete = null;
-    }, 5000),
-  };
-  undo.onclick = () => {
-    if (!pendingDelete) return;
-    clearTimeout(pendingDelete.timer);
-    const insertAt = Math.min(pendingDelete.idx, STATE[pendingDelete.list].length);
-    STATE[pendingDelete.list].splice(insertAt, 0, pendingDelete.item);
-    const restoredId = pendingDelete.item.id;
-    const restoredList = pendingDelete.list;
-    pendingDelete = null;
-    toast.classList.remove('show');
-    renderList(restoredList);
-    renderDone();
-    updateCounts();
-    saveAll();
-    setTimeout(() => {
-      const li = document.querySelector(`li.item[data-id="${restoredId}"]`);
-      if (li) li.focus({ preventScroll: true });
-    }, 0);
-  };
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, opts.duration || 5000);
+}
+function hideToast() {
+  if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+  document.getElementById('toast').classList.remove('show');
+  pendingDelete = null;   // the delete-undo window closes once the toast is gone
 }
 function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
